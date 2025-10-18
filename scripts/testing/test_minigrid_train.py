@@ -23,7 +23,7 @@ def train(env, observation, policy):
 
    env.close()
 
-
+   
 if __name__ == "__main__":
 
    # print(gym.envs.registry.keys())
