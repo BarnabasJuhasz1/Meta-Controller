@@ -30,6 +30,6 @@ if __name__ == "__main__":
    # env = gym.make("MiniGrid-Empty-5x5-v0", render_mode="human")
    env = SimpleEnv(render_mode="human")
 
-   observation, info = env.reset(seed=42)
+   observation, info = env.reset(seed=42) 
 
    train(env, observation, random_sample_policy)

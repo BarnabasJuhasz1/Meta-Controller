@@ -1,0 +1,198 @@
+{
+    "os": "Linux-6.8.0-54-generic-x86_64-with-glibc2.39",
+    "python": "3.10.19",
+    "heartbeatAt": "2025-11-15T15:53:02.123018",
+    "startedAt": "2025-11-15T15:53:02.011561",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--run_group",
+        "Large",
+        "--env",
+        "ant_maze_large",
+        "--max_path_length",
+        "300",
+        "--seed",
+        "0",
+        "--traj_batch_size",
+        "16",
+        "--n_parallel",
+        "4",
+        "--n_epochs_per_eval",
+        "500",
+        "--dim_option",
+        "4",
+        "--algo",
+        "SZPC",
+        "--exp_name",
+        "TheBest",
+        "--phi_type",
+        "Projection",
+        "--explore_type",
+        "SZN",
+        "--trans_optimization_epochs",
+        "150",
+        "--is_wandb",
+        "1",
+        "--SZN_w2",
+        "10",
+        "--SZN_w3",
+        "3",
+        "--SZN_window_size",
+        "20",
+        "--SZN_repeat_time",
+        "3",
+        "--n_epochs",
+        "20000",
+        "--Repr_max_step",
+        "300",
+        "--dual_slack",
+        "1e-3"
+    ],
+    "state": "running",
+    "program": "/home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/tests/main.py",
+    "codePath": "tests/main.py",
+    "git": {
+        "remote": "https://github.com/ZhHe11/RSD.git",
+        "commit": "eba294c069d16d391d9703d32f716f1d58883f4f"
+    },
+    "email": "juhasz.barna12@gmail.com",
+    "root": "/home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD",
+    "host": "Chronos",
+    "username": "juhasz",
+    "executable": "/home/juhasz/miniforge3/envs/rsd/bin/python",
+    "cpu_count": 16,
+    "cpu_count_logical": 22,
+    "cpu_freq": {
+        "current": 999.1260000000001,
+        "min": 400.0,
+        "max": 4281.818181818182
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 1874.236,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 1678.869,
+            "min": 400.0,
+            "max": 5100.0
+        },
+        {
+            "current": 1900.0,
+            "min": 400.0,
+            "max": 5100.0
+        },
+        {
+            "current": 2000.0,
+            "min": 400.0,
+            "max": 5100.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 5100.0
+        },
+        {
+            "current": 1677.616,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 1250.4,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 2001.577,
+            "min": 400.0,
+            "max": 4800.0
+        },
+        {
+            "current": 999.948,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 1000.993,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 993.233,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 1000.165,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 999.298,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 1000.201,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 3800.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 2500.0
+        },
+        {
+            "current": 400.0,
+            "min": 400.0,
+            "max": 2500.0
+        }
+    ],
+    "disk": {
+        "total": 937.3305015563965,
+        "used": 658.6162490844727
+    },
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+            "memory_total": 8585740288
+        }
+    ],
+    "memory": {
+        "total": 30.955318450927734
+    }
+}

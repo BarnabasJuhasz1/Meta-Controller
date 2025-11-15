@@ -1,0 +1,26 @@
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Current SDK version is 0.15.4
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Configure stats pid to 71800
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Loading settings from /home/juhasz/.config/wandb/settings
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Loading settings from /home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/wandb/settings
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'tests/main.py', 'program': '/home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/tests/main.py'}
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_setup.py:_flush():76] Applying login settings: {'mode': 'offline'}
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_init.py:_log_setup():507] Logging user logs to /home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/exp/Large/TheBestsd000_1763221314_ant_maze_large_SZPC/wandb/offline-run-20251115_164157-xn8q4zk1/logs/debug.log
+2025-11-15 16:41:57,068 INFO    MainThread:71800 [wandb_init.py:_log_setup():508] Logging internal logs to /home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/exp/Large/TheBestsd000_1763221314_ant_maze_large_SZPC/wandb/offline-run-20251115_164157-xn8q4zk1/logs/debug-internal.log
+2025-11-15 16:41:57,069 INFO    MainThread:71800 [wandb_init.py:init():547] calling init triggers
+2025-11-15 16:41:57,069 INFO    MainThread:71800 [wandb_init.py:init():554] wandb.init called with sweep_config: {}
+config: {'run_group': 'Large', 'normalizer_type': 'off', 'encoder': 0, 'exp_name': 'TheBest', 'env': 'ant_maze_large', 'frame_stack': None, 'max_path_length': 300, 'use_gpu': 1, 'sample_cpu': 1, 'seed': 0, 'n_parallel': 4, 'n_thread': 1, 'n_epochs': 20000, 'traj_batch_size': 16, 'trans_minibatch_size': 1024, 'trans_optimization_epochs': 150, 'n_epochs_per_eval': 500, 'n_epochs_per_log': 25, 'n_epochs_per_save': 1000, 'n_epochs_per_pt_save': 1000, 'n_epochs_per_pkl_update': None, 'num_random_trajectories': 8, 'num_video_repeats': 2, 'eval_record_video': 1, 'eval_plot_axis': None, 'video_skip_frames': 1, 'dim_option': 4, 'common_lr': 0.0001, 'lr_op': None, 'lr_te': None, 'alpha': 0.01, 'algo': 'SZPC', 'sac_tau': 0.005, 'sac_lr_q': None, 'sac_lr_a': None, 'sac_discount': 0.99, 'sac_scale_reward': 1.0, 'sac_target_coef': 1.0, 'sac_min_buffer_size': 10000, 'sac_max_buffer_size': 300000, 'spectral_normalization': 0, 'model_master_dim': 1024, 'model_master_num_layers': 2, 'model_master_nonlinearity': None, 'sd_const_std': 1, 'sd_batch_norm': 1, 'num_alt_samples': 100, 'split_group': 65536, 'discrete': 0, 'inner': 1, 'unit_length': 1, 'dual_reg': 1, 'dual_lam': 20, 'dual_slack': 0.001, 'dual_dist': 'one', 'dual_lr': None, 'phi_type': 'Projection', 'policy_type': 'baseline', 'explore_type': 'SZN', 'sample_type': 'baseline', 'num_her': 0, 'is_wandb': 1, 'wandb_note': 'none', '_trans_phi_optimization_epochs': 1, '_trans_policy_optimization_epochs': 1, '_trans_online_sample_epochs': 1, 'target_theta': 1.0, 'SZN_w2': 10.0, 'SZN_w3': 3.0, 'SZN_window_size': 20.0, 'SZN_repeat_time': 3.0, 'Repr_max_step': 300.0, 'SZN_std_min': 0.1, 'SZN_std_max': 0.5, 'z_unit': 0, 'save_pt_step': 500}
+2025-11-15 16:41:57,069 INFO    MainThread:71800 [wandb_init.py:init():596] starting backend
+2025-11-15 16:41:57,069 INFO    MainThread:71800 [wandb_init.py:init():600] setting up manager
+2025-11-15 16:41:57,072 INFO    MainThread:71800 [backend.py:_multiprocessing_setup():106] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-11-15 16:41:57,075 INFO    MainThread:71800 [wandb_init.py:init():606] backend started and connected
+2025-11-15 16:41:57,078 INFO    MainThread:71800 [wandb_init.py:init():703] updated telemetry
+2025-11-15 16:41:57,087 INFO    MainThread:71800 [wandb_init.py:init():736] communicating run to backend with 60.0 second timeout
+2025-11-15 16:41:57,096 INFO    MainThread:71800 [wandb_init.py:init():787] starting run threads in backend
+2025-11-15 16:42:02,456 INFO    MainThread:71800 [wandb_run.py:_console_start():2155] atexit reg
+2025-11-15 16:42:02,456 INFO    MainThread:71800 [wandb_run.py:_redirect():2010] redirect: SettingsConsole.WRAP_RAW
+2025-11-15 16:42:02,457 INFO    MainThread:71800 [wandb_run.py:_redirect():2075] Wrapping output streams.
+2025-11-15 16:42:02,457 INFO    MainThread:71800 [wandb_run.py:_redirect():2100] Redirects installed.
+2025-11-15 16:42:02,458 INFO    MainThread:71800 [wandb_init.py:init():828] run started, returning control to user process
+2025-11-15 16:42:03,613 WARNING MsgRouterThr:71800 [router.py:message_loop():77] message_loop has been closed
