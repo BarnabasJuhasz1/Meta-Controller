@@ -52,3 +52,5 @@ visualizations/
 # Snellius job outputs
 *.out
 *.job
+
+*.pth
