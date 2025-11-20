@@ -132,10 +132,11 @@ class OptionWorker(DefaultWorker):
 
             a, agent_info = self.agent.default_policy.get_action(agent_input)
 
-            if self._render:
-                next_o, r, d, env_info = self.env.step(a, render=self._render)
-            else:
-                next_o, r, d, env_info = self.env.step(a)
+            # commented out, caused an exception for the maze environment with RSD
+            # if self._render:
+            #     next_o, r, d, env_info = self.env.step(a, render=self._render)
+            # else:
+            next_o, r, d, env_info = self.env.step(a)
 
             self._observations.append(self._prev_obs)
             self._rewards.append(r)

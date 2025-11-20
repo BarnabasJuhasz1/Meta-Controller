@@ -15,12 +15,11 @@ import torch.multiprocessing as mp
 if 'mac' in platform.platform():
     pass
 else:
-    print("HEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
     os.environ['MUJOCO_GL'] = 'egl'
     if 'SLURM_STEP_GPUS' in os.environ:
         os.environ['EGL_DEVICE_ID'] = os.environ['SLURM_STEP_GPUS']
 
-    os.environ["MUJOCO_PY_FORCE_CPU_RENDER"] = "true"
+    #os.environ["MUJOCO_PY_FORCE_CPU_RENDER"] = "true"
 
 # import better_exceptions
 import numpy as np
@@ -67,7 +66,7 @@ def get_argparser():
     parser.add_argument('--exp_name', type=str, default='')
 
     parser.add_argument('--env', type=str, default='kitchen', choices=[
-        'maze', 'half_cheetah', 'ant', 'dmc_cheetah', 'dmc_quadruped', 'dmc_humanoid', 'kitchen', 'ant_maze', 'lm', 'ant_maze_large',
+        'maze', 'half_cheetah', 'ant', 'dmc_cheetah', 'dmc_quadruped', 'dmc_humanoid', 'kitchen', 'ant_maze', 'lm', 'ant_maze_large', 'minigrid',
     ])
     parser.add_argument('--frame_stack', type=int, default=None)
 
@@ -149,7 +148,7 @@ def get_argparser():
     parser.add_argument('--_trans_policy_optimization_epochs', type=int, default=1)
     parser.add_argument('--_trans_online_sample_epochs', type=int, default=1)
     parser.add_argument('--target_theta', type=float, default=1.)
-    
+
     parser.add_argument('--SZN_w2', type=float, default=3.)
     parser.add_argument('--SZN_w3', type=float, default=3.)
     parser.add_argument('--SZN_window_size', type=float, default=10.)
@@ -160,6 +159,8 @@ def get_argparser():
     parser.add_argument('--z_unit', type=int, default=0)
     parser.add_argument('--save_pt_step', type=int, default=500)
     
+    parser.add_argument('--render_mode', type=str, default="None", choices=["None", 'rgb_array', 'human'])
+
     return parser
 
 
@@ -269,7 +270,7 @@ def run(ctxt=None):
     set_seed(args.seed)
     runner = OptionLocalRunner(ctxt)
     max_path_length = args.max_path_length
-    contextualized_make_env = functools.partial(make_env, args=args, max_path_length=max_path_length)
+    contextualized_make_env = functools.partial(make_env, args=args, max_path_length=max_path_length, render_mode=args.render_mode)
     env = contextualized_make_env()
     example_ob = env.reset()
 
@@ -528,6 +529,7 @@ def run(ctxt=None):
         explore_type=args.explore_type,
         sample_type=args.sample_type,
         num_her=args.num_her,
+        # remove to allow human-render of antmaze ?
         target_theta=args.target_theta,
     )
 
@@ -567,14 +569,22 @@ def run(ctxt=None):
             **algo_kwargs,
             SampleZPolicy=SampleZPolicy,
             **skill_common_args,
+            # disabled for human render
             _trans_phi_optimization_epochs=args._trans_phi_optimization_epochs,
             _trans_policy_optimization_epochs=args._trans_policy_optimization_epochs,
             _trans_online_sample_epochs=args._trans_online_sample_epochs,
-            SZP_w2=args.SZP_w2,
-            SZP_w3=args.SZP_w3,
-            SZP_window_size=args.SZP_window_size,
-            SZP_repeat_time=args.SZP_repeat_time,
-            Repr_temperature=args.Repr_temperature,
+
+            # non-existing and hopefully non-refer
+            # SZP_w2=args.SZP_w2,
+            # SZP_w3=args.SZP_w3,
+            # SZP_window_size=args.SZP_window_size,
+            # SZP_repeat_time=args.SZP_repeat_time,
+            SZN_w2=args.SZN_w2,
+            SZN_w3=args.SZN_w3,
+            SZN_window_size=args.SZN_window_size,
+            SZN_repeat_time=args.SZN_repeat_time,
+            #without providing Repr_temperature it defaults to 0.5 but is also never actually used...
+            # Repr_temperature=args.Repr_temperature,
             Repr_max_step=args.Repr_max_step,
         )
     

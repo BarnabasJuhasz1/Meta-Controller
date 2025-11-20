@@ -87,7 +87,9 @@ def valid_goal_sampler(self, np_random, freq=5):
 class MazeWrapper(gym.Wrapper):
     def __init__(self, env_name, random_init=True):
         self.env = gym.make(env_name)
-        self.env.render(mode='rgb_array', width=200, height=200)
+        #self.env.render(mode='rgb_array', width=200, height=200)
+        # changed to render mode human
+        self.env.render(mode='human', width=200, height=200)
         self.env_name = env_name
         self.random_init=random_init
         self.inner_env = get_inner_env(self.env)
@@ -389,7 +391,7 @@ def plot_trajectories(env, trajectories, fig, ax, color_list=None):
         obs = np.array(trajectory['observation'])
 
         # convert back to xy?
-        if 'ant' in env.env_name:
+        if 'ant' or 'minigrid'in env.env_name:
             all_x = []
             all_y = []
             for info in trajectory['info']:
@@ -400,6 +402,7 @@ def plot_trajectories(env, trajectories, fig, ax, color_list=None):
         elif 'maze2d' in env.env_name:
             all_x = obs[:, 1] * 4 - 3.2
             all_y = obs[:, 0] * 4 - 3.2
+
         ax.scatter(all_x, all_y, s=5, c=color, alpha=0.2)
         ax.scatter(all_x[-1], all_y[-1], s=50, c=color, marker='*', alpha=1, edgecolors='black', label='traj.'+str(count))
         count += 1

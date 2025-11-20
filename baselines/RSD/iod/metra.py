@@ -398,7 +398,7 @@ class METRA(IOD):
     '''
     @torch.no_grad()
     def _evaluate_policy(self, runner, env_name):
-        if env_name in ['lm', 'ant_maze', 'ant_maze_large']:  
+        if env_name in ['lm', 'ant_maze', 'ant_maze_large']:
             if wandb.run is not None:
                 path = wandb.run.dir + '/E' + str(runner.step_itr) + '-'
             else:
@@ -419,6 +419,7 @@ class METRA(IOD):
             self.eval_kitchen_metra(runner)
             
         else:
+            print(f"environment name: {env_name}")
             self.eval_metra(runner)
             
             

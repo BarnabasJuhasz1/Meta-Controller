@@ -21,6 +21,7 @@ from envs.AntMazeEnv import MazeWrapper, GoalReachingMaze, plot_trajectories, pl
 import matplotlib.pyplot as plt
 import os
 # from iod.ant_eval import *
+from iod.viz_utils import *
 from iod.agent import *
 from iod.viz_utils import PlotMazeTrajDist, PlotMazeTrajWindowDist, viz_dist_circle, PlotGMM
 
@@ -257,83 +258,87 @@ class IOD(RLAlgorithm):
         '''
         plot training traj
         '''
-        # with torch.no_grad():
-        #     # if (runner.step_itr + 2) % self.n_epochs_per_log == 0 and wandb.run is not None:
-        #     if wandb.run is not None and self.method['phi'] != 'baseline':
-        #         Pepr_viz = True
-        #         if 'maze' in self.env_name or 'lm' in self.env_name:
-        #             fig, ax = plt.subplots(1, 2, figsize=(15, 6))
-        #             fig.suptitle("Epoch:" + str(runner.step_itr))
-        #             env = runner._env
-        #             env.draw(ax[0])
-        #             list_viz_traj = []
-        #             All_Repr_obs_list = []
-        #             All_Goal_obs_list = []
-        #             for i in range(len(trajectories)):
-        #                 # plot phi
-        #                 if Pepr_viz:
-        #                     if self.method['phi'] == 'Projection':
-        #                         psi_s = self.Psi(self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean).cpu().numpy()
-        #                     else:
-        #                         psi_s = self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean.cpu().numpy()
-        #                     psi_g = trajectories[i]['agent_infos']['option']
-        #                     All_Repr_obs_list.append(psi_s)
-        #                     All_Goal_obs_list.append(psi_g)
+        with torch.no_grad():
+            # if (runner.step_itr + 2) % self.n_epochs_per_log == 0 and wandb.run is not None:
+            if wandb.run is not None and self.method['phi'] != 'baseline':
+                Pepr_viz = True
+                #if 'maze' in self.env_name or 'lm' in self.env_name:
+                # changed to: because 'maze_env.py' wrapper does not implement 'draw' function and we get an exception
+                if 'antmaze' in self.env_name or 'lm' in self.env_name or 'minigrid' in self.env_name:
+                    fig, ax = plt.subplots(1, 2, figsize=(15, 6))
+                    fig.suptitle("Epoch:" + str(runner.step_itr))
+                    env = runner._env
+                    env.draw(ax[0])
+                    list_viz_traj = []
+                    All_Repr_obs_list = []
+                    All_Goal_obs_list = []
+                    for i in range(len(trajectories)):
+                        # plot phi
+                        if Pepr_viz:
+                            if self.method['phi'] == 'Projection':
+                                psi_s = self.Psi(self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean).cpu().numpy()
+                            else:
+                                psi_s = self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean.cpu().numpy()
+                            psi_g = trajectories[i]['agent_infos']['option']
+                            All_Repr_obs_list.append(psi_s)
+                            All_Goal_obs_list.append(psi_g)
                         
-        #                 # plot the subgoal
-        #                 if 'sub_goal' in trajectories[i]['agent_infos'].keys():
-        #                     sub_goal = trajectories[i]['agent_infos']['sub_goal'][0]
-        #                     ax.scatter(sub_goal[0], sub_goal[1], s=50, marker='x', alpha=1, edgecolors='black', label='target.'+str(i))
-        #                 # plot the traj
-        #                 viz_traj = {}
-        #                 viz_traj['observation'] = trajectories[i]['observations']
-        #                 viz_traj['info'] = []
-        #                 for j in range(len(trajectories[i]['observations'])):
-        #                     viz_traj['info'].append({'x':viz_traj['observation'][j][0], 'y':viz_traj['observation'][j][1]})
-        #                 list_viz_traj.append(viz_traj)
-        #             plot_trajectories(env, list_viz_traj, fig, ax[0])
-        #             title_txt = "train_policy: " + str(self.train_policy) + "\n train_phi: " + str(self.train_phi)
-        #             ax[0].set_title(title_txt)
-        #             ax[0].legend(loc='lower right')
-        #             path = wandb.run.dir
-        #             if self.method['phi'] == 'Projection':
-        #                 ax[1].set_xlim(-1, 1)
-        #                 ax[1].set_ylim(-1, 1)
-        #                 # plot GMM
-        #                 window_dist = self.UpdateGMM(self.DistWindow, mix_dist_prob=None, device=self.device)
-        #                 if len(self.SfReprBuffer) > 0:
-        #                     psi_z = np.array(self.SfReprBuffer)
-        #                 else:
-        #                     psi_z = None
-        #                 PlotGMM(window_dist, psi_z=psi_z, fig=fig, ax=ax[1], device=self.device, dim=self.dim_option)
-        #             # plot Traj in Z-space
-        #             PCA_plot_traj(ax[1], All_Repr_obs_list, All_Goal_obs_list, path, path_len=self.max_path_length, is_goal=True)
-        #             filepath = os.path.join(path, "train_Maze_traj.png")
-        #             print(filepath)
-        #             plt.savefig(filepath) 
-        #             plt.close()
-        #             if self.save_debug == True or runner.step_itr % self.n_epochs_per_eval == 0:
-        #                 wandb.log(({"train_Maze_traj": wandb.Image(filepath)}))
+                        # plot the subgoal
+                        if 'sub_goal' in trajectories[i]['agent_infos'].keys():
+                            sub_goal = trajectories[i]['agent_infos']['sub_goal'][0]
+                            ax.scatter(sub_goal[0], sub_goal[1], s=50, marker='x', alpha=1, edgecolors='black', label='target.'+str(i))
+                        # plot the traj
+                        viz_traj = {}
+                        viz_traj['observation'] = trajectories[i]['observations']
+                        viz_traj['info'] = []
+                        for j in range(len(trajectories[i]['observations'])):
+                            viz_traj['info'].append({'x':viz_traj['observation'][j][0], 'y':viz_traj['observation'][j][1]})
+                        list_viz_traj.append(viz_traj)
+                    plot_trajectories(env, list_viz_traj, fig, ax[0])
+                    title_txt = "train_policy: " + str(self.train_policy) + "\n train_phi: " + str(self.train_phi)
+                    ax[0].set_title(title_txt)
+                    ax[0].legend(loc='lower right')
+                    path = wandb.run.dir
+                    if self.method['phi'] == 'Projection':
+                        ax[1].set_xlim(-1, 1)
+                        ax[1].set_ylim(-1, 1)
+                        # plot GMM
+                        window_dist = self.UpdateGMM(self.DistWindow, mix_dist_prob=None, device=self.device)
+                        if len(self.SfReprBuffer) > 0:
+                            psi_z = np.array(self.SfReprBuffer)
+                        else:
+                            psi_z = None
+                        PlotGMM(window_dist, psi_z=psi_z, fig=fig, ax=ax[1], device=self.device, dim=self.dim_option)
+                    # plot Traj in Z-space
+                    # moved the axis argument to the end of the function call to fix the error with environment set to 'lm'
+                    # PCA_plot_traj(ax[1], All_Repr_obs_list, All_Goal_obs_list, path, path_len=self.max_path_length, is_goal=True)
+                    PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=self.max_path_length, is_goal=True, ax=ax[1])
+                    filepath = os.path.join(path, "train_Maze_traj.png")
+                    print(filepath)
+                    plt.savefig(filepath) 
+                    plt.close()
+                    if self.save_debug == True or runner.step_itr % self.n_epochs_per_eval == 0:
+                        wandb.log(({"train_Maze_traj": wandb.Image(filepath)}))
 
-        #         else:
-        #             fig, ax = plt.subplots()
-        #             env = runner._env
-        #             list_viz_traj = []
-        #             All_Repr_obs_list = []
-        #             All_Goal_obs_list = []
-        #             for i in range(len(trajectories)):
-        #                 # plot phi
-        #                 if Pepr_viz:
-        #                     if self.method['phi'] == 'Projection':
-        #                         psi_s = self.Psi(self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean).cpu().numpy()
-        #                     else:
-        #                         psi_s = self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean.cpu().numpy()
-        #                     psi_g = trajectories[i]['agent_infos']['option']
-        #                     All_Repr_obs_list.append(psi_s)
-        #                     All_Goal_obs_list.append(psi_g)
+                else:
+                    fig, ax = plt.subplots()
+                    env = runner._env
+                    list_viz_traj = []
+                    All_Repr_obs_list = []
+                    All_Goal_obs_list = []
+                    for i in range(len(trajectories)):
+                        # plot phi
+                        if Pepr_viz:
+                            if self.method['phi'] == 'Projection':
+                                psi_s = self.Psi(self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean).cpu().numpy()
+                            else:
+                                psi_s = self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean.cpu().numpy()
+                            psi_g = trajectories[i]['agent_infos']['option']
+                            All_Repr_obs_list.append(psi_s)
+                            All_Goal_obs_list.append(psi_g)
         
-        #             path = wandb.run.dir
-        #             PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=self.max_path_length, is_goal=True)
+                    path = wandb.run.dir
+                    PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=self.max_path_length, is_goal=True)
   
         return trajectories
 

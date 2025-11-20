@@ -68,6 +68,13 @@ class RSD(IOD):
 
             **kwargs,
     ):
+        # added to make it run.. need to investage whether these parameters are actually used ?
+        if 'target_theta' in kwargs:
+            del kwargs['target_theta']
+            del kwargs['_trans_phi_optimization_epochs']
+            del kwargs['_trans_policy_optimization_epochs']
+            del kwargs['_trans_online_sample_epochs']
+
         super().__init__(**kwargs)
 
         self.qf1 = qf1.to(self.device)
@@ -168,10 +175,14 @@ class RSD(IOD):
         self.save_debug = False
     
     
+    # Psi is a projection function applied to latent states 𝜙(x)
+    # it is used to map latent vectors into a bounded space
     def Psi(self, phi_x, phi_x0=None):
-        if 'Projection' in self.method['phi']:   
+        if 'Projection' in self.method['phi']:  
+            # print("USING PROJECTION") 
             return torch.tanh(2/self.max_path_length * (phi_x))
         else:
+            # print("BASELINE, THIS SHOULD NOT RUN") 
             return phi_x
     
     def norm(self, x, keepdim=False):
@@ -190,6 +201,7 @@ class RSD(IOD):
         return get_torch_concat_obs(obs, option)
 
 
+    #qf1, qf2: two critic networks used in SAC-style
     @torch.no_grad()
     def EstimateValue(self, policy, alpha, qf1, qf2, option, state, num_samples=3):
         batch = option.shape[0]     # [s0, z]
@@ -212,7 +224,9 @@ class RSD(IOD):
         for t_param, param in zip(target_model.parameters(), ori_model.parameters()):
             t_param.data.copy_(param.data)
 
-
+    # computes regret for a given skill
+    # If a skill improved → regret is positive.
+    # If it stagnated or worsened → regret is zero or negative.
     def cal_regeret(self, z, state):
         '''
         z: [batch_sample, dim_option]
@@ -605,7 +619,12 @@ class RSD(IOD):
         
         sac_utils.update_targets(self)
 
+
     def _update_rewards(self, tensors, v):
+        """
+            using Projection is the paper's bounded projection representation
+            for baseline methods, set --phi_type baseline
+        """
         if self.method['phi'] == 'Projection':
             self._update_rewards_C(tensors, v)
         else:
@@ -613,8 +632,11 @@ class RSD(IOD):
             next_obs = v['next_obs']
             
             if self.inner:
+                #Encode current obs:
                 cur_z = self.traj_encoder(obs).mean
+                #Encode next obs:
                 next_z = self.traj_encoder(next_obs).mean
+                #This is basically “what direction did the agent move in latent space?”
                 target_z = next_z - cur_z
 
                 if self.discrete:
@@ -633,6 +655,7 @@ class RSD(IOD):
                 target_dists = self.traj_encoder(next_obs)
 
                 if self.discrete:
+                    # So if the option says “skill 3”, reward is high when the encoder predicts latent state consistent with skill 3.
                     logits = target_dists.mean
                     rewards = -torch.nn.functional.cross_entropy(logits, v['options'].argmax(dim=1), reduction='none')
                 else:
@@ -647,6 +670,9 @@ class RSD(IOD):
     
     
     def _update_rewards_C(self, tensors, v):
+        """
+            updates 
+        """
         obs = v['obs']
         next_obs = v['next_obs']
         phi_s = self.traj_encoder(obs).mean
@@ -662,19 +688,25 @@ class RSD(IOD):
         d = 1 / self.max_path_length
         
         # 1. Similarity Reward
+        # “Reward the agent for moving from s to s′ in the direction of the skill embedding.”
         delta_norm = self.norm((psi_s_next - psi_s))
         direction_sim = (1 * (psi_s_next - psi_s) * self.vec_norm(psi_g - psi_s.detach())).sum(dim=-1)        
-        phi_obj = direction_sim
+        phi_obj = direction_sim 
 
         # 2. Goal Arrival Reward
+        # “Reward the agent when it gets closer to the goal (skill embedding) in the Ψ-projected latent space.”
         reward_g_distance = 1/d * torch.clamp(self.norm(psi_g - psi_s) - self.norm(psi_g - psi_s_next), min=-k*d, max=k*d)
         policy_rewards = 1 * reward_g_distance
         
+        # This matches the two-objective structure from the paper:
+        # φ-objective → learning the representation / skills
+        # policy reward → guiding the agent through skill execution
+
         v.update({
             'cur_z': phi_s,
             'next_z': phi_s_next,
-            'rewards': phi_obj,
-            'policy_rewards': policy_rewards,
+            'rewards': phi_obj, #for skill learning
+            'policy_rewards': policy_rewards, #for RL policy learning
             'psi_s_0': psi_s_0,
             'psi_s': psi_s,
             'psi_s_next': psi_s_next,
@@ -834,7 +866,7 @@ class RSD(IOD):
     '''
     @torch.no_grad()
     def _evaluate_policy(self, runner, env_name):
-        if env_name in ['lm', 'ant_maze', 'ant_maze_large']:  
+        if env_name in ['lm', 'ant_maze', 'ant_maze_large', 'minigrid']:
             if wandb.run is not None:
                 path = wandb.run.dir + '/E' + str(runner.step_itr) + '-'
             else:
@@ -850,10 +882,11 @@ class RSD(IOD):
                     "Maze_traj": wandb.Image(path + "-Maze_traj.png"),
                 },
             )
+            
+            #self.eval_metra(runner)
         
         elif env_name == 'kitchen':
             self.eval_metra(runner)
-            
         else:
             self.eval_metra(runner)
             

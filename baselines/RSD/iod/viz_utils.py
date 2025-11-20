@@ -511,6 +511,8 @@ def PlotMazeTraj(env, agent_traj_encoder, policy, device, Psi, dim_option=2, max
     FD = np.array(FinallDistanceList).mean()
     AR = np.array(ArriveList).mean()
     print("FD:", FD, '\n', "AR:", AR)
+    #ax[0] = plot_trajectories(env, All_trajs_list, fig, ax[0], cover_list=All_Cover_list)
+    #ax[0] = plot_trajectories(env, All_Cover_list, fig, ax[0])
     ax[0] = plot_trajectories(env, All_trajs_list, fig, ax[0])
     ax[1] = PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=max_path_length, is_goal=False, ax=ax[1])
     

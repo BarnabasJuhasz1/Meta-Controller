@@ -5,7 +5,7 @@ import sys
 import os
 
 
-def make_env(args, max_path_length):
+def make_env(args, max_path_length, render_mode=None):
     if args.env == 'maze':
         from envs.maze_env import MazeEnv
         env = MazeEnv(
@@ -48,10 +48,13 @@ def make_env(args, max_path_length):
         from envs.AntMazeEnv import MazeWrapper, GoalReachingMaze
         env = MazeWrapper("antmaze-large-diverse-v0", random_init=False)
 
-
     elif args.env == 'lm':
         from envs.AntMazeEnv import MazeWrapper, GoalReachingMaze
         env = MazeWrapper("maze2d-large-v1", random_init=False)
+
+    elif args.env == 'minigrid':
+        from envs.baseline_minigrid import BaselineMiniGridEnv
+        env = BaselineMiniGridEnv(max_steps=max_path_length, render_mode=render_mode)
     
     else:
         raise NotImplementedError
@@ -119,6 +122,10 @@ def make_env_wo_args(**kwargs):
     elif args.env == 'lm':
         from envs.AntMazeEnv import MazeWrapper, GoalReachingMaze
         env = MazeWrapper("maze2d-large-v1", random_init=False)
+
+    elif args.env == 'minigrid':
+        from envs.baseline_minigrid import BaselineMiniGridEnv
+        env = BaselineMiniGridEnv(max_steps=args.max_path_length)
     
     else:
         raise NotImplementedError
