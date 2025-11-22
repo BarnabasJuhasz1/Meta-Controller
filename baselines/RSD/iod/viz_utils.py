@@ -15,6 +15,224 @@ import copy
 from iod.utils import get_torch_concat_obs
 import torch.distributions as dist
 
+def plot_trajectories(env, trajectories, fig, ax, color_list=None):
+    if color_list is None:
+        from itertools import cycle
+        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        color_list = cycle(color_cycle)
+
+    count = 0
+    for color, trajectory in zip(color_list, trajectories):
+        obs = np.array(trajectory['observation'])
+
+        # convert back to xy?
+        if 'ant' or 'minigrid'in env.env_name:
+            all_x = []
+            all_y = []
+            for info in trajectory['info']:
+                all_x.append(info['x'])
+                all_y.append(info['y'])
+            all_x = np.array(all_x)
+            all_y = np.array(all_y)
+        elif 'maze2d' in env.env_name:
+            all_x = obs[:, 1] * 4 - 3.2
+            all_y = obs[:, 0] * 4 - 3.2
+
+        ax.scatter(all_x, all_y, s=5, c=color, alpha=0.2)
+        ax.scatter(all_x[-1], all_y[-1], s=50, c=color, marker='*', alpha=1, edgecolors='black', label='traj.'+str(count))
+        count += 1
+
+    env.draw(ax)
+    return ax
+
+# --- Helper to handle trajectory plotting locally if AntMazeEnv is missing ---
+# def plot_trajectories_local(env, trajectories, fig, ax):
+#     """
+#     Local implementation to plot trajectories. 
+#     Handles scaling for MiniGrid if tile_size > 1.
+#     """
+#     if 'minigrid' in env.env_name.lower():
+#         tile_size = 32 # Default minigrid tile size
+#     else:
+#         print("WARNING: NOT IN MINIGRID!")
+#         tile_size = 1
+
+#     colors = cm.rainbow(np.linspace(0, 1, len(trajectories)))
+#     for i, traj in enumerate(trajectories):
+#         # Extract coordinates from the tracking list
+#         # Structure: traj['env_infos']['coordinates'] -> list of arrays
+#         coords = np.array(traj['env_infos']['coordinates'])
+        
+#         # Scale coordinates if using MiniGrid pixel render
+#         coords = coords * tile_size
+        
+#         ax.plot(coords[:, 0], coords[:, 1], color=colors[i], linewidth=0.8, alpha=0.7)
+#         # Plot start/end
+#         # ax.scatter(coords[0, 0], coords[0, 1], color=colors[i], s=5)
+#         ax.scatter(coords[-1, 0], coords[-1, 1], color=colors[i], marker=".", s=20)
+    
+#     return ax
+
+# def plot_trajectories_local(env, trajectories, fig, ax):
+#     """
+#     Local version of trajectory plotting that mimics plot_trajectories.
+#     Uses trajectory['info'][i]['x'] / ['y'] exactly like plot_trajectories.
+#     """
+
+#     # Pick colors
+#     colors = cm.rainbow(np.linspace(0, 1, len(trajectories)))
+
+#     count = 0
+#     for color, traj in zip(colors, trajectories):
+#         infos = traj.get("info", None)
+#         if infos is None:
+#             print("Trajectory missing 'info' field.")
+#             continue
+
+#         # Extract x/y positions exactly like plot_trajectories
+#         xs = []
+#         ys = []
+#         for info in infos:
+#             xs.append(info["x"])
+#             ys.append(info["y"])
+
+#         xs = np.array(xs)
+#         ys = np.array(ys)
+
+#         # Path
+#         ax.scatter(xs, ys, s=5, c=[color], alpha=0.2)
+
+#         # Endpoint
+#         ax.scatter(
+#             xs[-1], ys[-1],
+#             s=50, c=[color], marker='*', alpha=1,
+#             edgecolors='black', label=f"traj.{count}"
+#         )
+
+#         count += 1
+
+#     # Draw env map if provided
+#     if hasattr(env, "draw"):
+#         env.draw(ax)
+
+#     return ax
+
+# def plot_trajectories_local(env, trajectories, fig, ax, tile_size=32):
+#     """
+#     Local version of trajectory plotting that mimics plot_trajectories.
+#     Uses trajectory['info'][i]['x'] / ['y'] exactly like plot_trajectories.
+#     """
+
+#     # Pick colors
+#     colors = cm.rainbow(np.linspace(0, 1, len(trajectories)))
+
+#     count = 0
+#     for color, traj in zip(colors, trajectories):
+#         infos = traj.get("info", None)
+#         if infos is None:
+#             print("Trajectory missing 'info' field.")
+#             continue
+
+#         # Extract x/y positions exactly like plot_trajectories
+#         xs = []
+#         ys = []
+#         for info in infos:
+#             xs.append(info["x"])
+#             ys.append(info["y"])
+
+#         # --- FIX START: Apply Tile Size Scaling ---
+#         xs = np.array(xs) * tile_size
+#         ys = np.array(ys) * tile_size
+#         # --- FIX END ---
+
+#         # Path
+#         ax.scatter(xs, ys, s=5, c=[color], alpha=0.2)
+
+#         # Endpoint
+#         ax.scatter(
+#             xs[-1], ys[-1],
+#             s=50, c=[color], marker='*', alpha=1,
+#             edgecolors='black', label=f"traj.{count}"
+#         )
+
+#         count += 1
+
+#     # Draw env map if provided
+#     # Note: We comment this out because PlotMazeTraj usually handles the background via imshow
+#     # if hasattr(env, "draw"):
+#     #     env.draw(ax)
+
+#     return ax
+
+
+def plot_trajectories_local(env, trajectories, fig, ax, tile_size=32):
+    """
+    Local version of trajectory plotting.
+    Handles scaling, centering, and jittering for grid worlds.
+    """
+
+    # Pick colors
+    colors = cm.rainbow(np.linspace(0, 1, len(trajectories)))
+
+    count = 0
+    for color, traj in zip(colors, trajectories):
+        infos = traj.get("info", None)
+        if infos is None:
+            print("Trajectory missing 'info' field.")
+            continue
+
+        # Extract x/y positions
+        xs = [] 
+        ys = []
+        for info in infos:
+            xs.append(info["x"])
+            ys.append(info["y"])
+
+        xs = np.array(xs)
+        ys = np.array(ys)
+
+        # --- FIX START: Scaling, Centering, and Jittering ---
+        if tile_size > 1:
+            # 1. Scale to pixels
+            xs = xs * tile_size
+            ys = ys * tile_size
+            
+            # 2. Center in the tile (shift right/down by half a tile)
+            half_tile = tile_size / 2.0
+            xs += half_tile
+            ys += half_tile
+            
+            # 3. Add random jitter
+            # We generate ONE offset per trajectory so the line stays connected/smooth
+            # Range: +/- 25% of the tile size (e.g., +/- 8 pixels for a 32px tile)
+            # This keeps the dot inside the tile but separates it from others
+            jitter_range = tile_size * 0.25 
+            dx = np.random.uniform(-jitter_range, jitter_range)
+            dy = np.random.uniform(-jitter_range, jitter_range)
+            
+            xs += dx
+            ys += dy
+        # --- FIX END ---
+
+        # Path
+        # ax.scatter(xs, ys, s=5, c=[color], alpha=0.2)
+        ax.plot(xs, ys, color=color, alpha=0.2, linewidth=1.5)
+
+        # Endpoint
+        ax.scatter(
+            xs[-1], ys[-1],
+            s=50, c=[color], marker='*', alpha=1,
+            edgecolors='black', label=f"traj.{count}"
+        )
+
+        count += 1
+
+    # Draw env map if provided (usually handled by imshow in iod.py now)
+    if hasattr(env, "draw"):
+        # env.draw(ax)
+        pass
+
+    return ax
 
 def Psi_baseline(x, *args, **kwargs):
     return x
@@ -215,30 +433,69 @@ def eval_cover_rate(env, agent_traj_encoder, agent_policy, dim_option, device, a
     ArriveList = []
     All_Cover_list = []
     eval_num = 100
+
+    if 'minigrid' in env.env_name.lower():
+        try:
+            grid_w = env._env.width - 2 # exclude walls
+            grid_h = env._env.height - 2
+            # Standard MiniGrid tile_size is 32
+            if hasattr(env._env, 'tile_size'):
+                tile_size = env._env.tile_size
+            else:
+                tile_size = 32 
+        except:
+            grid_w, grid_h = 8, 8
+            tile_size = 32
+
     if option_type != 'random':
+        if 'minigrid' in env.env_name.lower():
+            # Sample integer goals [1, width-2]
+            np_random = np.random.default_rng(seed=0)
+            GoalList = np_random.integers(1, min(grid_w, grid_h)+1, size=(eval_num, 2))
         # to do: fix the map from the ant-maze
-        if 'antmaze-medium' in env.env_name:
+        elif 'antmaze-medium' in env.env_name:
             np_random = np.random.default_rng(seed=0) 
             GoalList = env.goal_sampler(np_random=np_random)
             print(GoalList)
-        # else:
-        #     GoalList = np.load('path')
+        else:
+            # GoalList = np.load('path')
+            GoalList = np.random.uniform(-1, 1, (eval_num, 2))
+
         eval_num = len(GoalList)
     else:
         # provide a fake Goal List
         GoalList = np.random.uniform(-1, 1, (eval_num, 2))
         eval_num = len(GoalList)
+
     options = np.random.uniform(-1,1, (eval_num, dim_option))
     
     for j in trange(eval_num):
         goal = GoalList[j]
         dist_theld = -1
-        ax.scatter(goal[0], goal[1], s=25, marker='o', alpha=1, edgecolors='black')
-        if 'maze2d' in env.env_name:
-            goal_tmp = (goal + 3.2) / 4
-            goal[0] = goal_tmp[1]
-            goal[1] = goal_tmp[0]
-            dist_theld = -1/4
+        # ax.scatter(goal[0], goal[1], s=25, marker='o', alpha=1, edgecolors='black')
+        # MiniGrid goals are integers, plot them slightly cleaner
+        
+        # If minigrid, scale goal coords to pixels for plotting over imshow
+        plot_goal_x = goal[0] * tile_size if 'minigrid' in env.env_name.lower() else goal[0]
+        plot_goal_y = goal[1] * tile_size if 'minigrid' in env.env_name.lower() else goal[1]
+
+        if 'minigrid' in env.env_name.lower():
+        #      dist_theld = -1.5 # Relaxed threshold for grid
+        #      # Invert Y for plotting if using imshow (top-left origin) usually handled by scatter
+        #      ax.scatter(goal[0], goal[1], s=50, marker='x', color='red', alpha=1)
+        # else:
+        #      ax.scatter(goal[0], goal[1], s=25, marker='o', alpha=1, edgecolors='black')
+            dist_theld = -1.5 # Manhattan-ish distance < 1.5 implies arrival
+            ax.scatter(plot_goal_x, plot_goal_y, s=60, marker='x', color='red', alpha=1, linewidth=2)
+        else:
+            ax.scatter(plot_goal_x, plot_goal_y, s=25, marker='o', alpha=1, edgecolors='black')
+
+        # if 'maze2d' in env.env_name:
+        #     goal_tmp = (goal + 3.2) / 4
+        #     goal[0] = goal_tmp[1]
+        #     goal[1] = goal_tmp[0]
+        #     dist_theld = -1/4
+
         tensor_goal = torch.tensor(goal).to(device)
         # s0
         obs_0 = env.reset()
@@ -251,14 +508,20 @@ def eval_cover_rate(env, agent_traj_encoder, agent_policy, dim_option, device, a
             # option = vec_norm(torch.tensor(options[j]).unsqueeze(0).to(device).float())
             option = torch.tensor(options[j]).unsqueeze(0).to(device).float()
         else: 
-            target_obs = env.get_target_obs(obs_0, tensor_goal)
-            phi_target_obs = agent_traj_encoder(target_obs).mean
-            if option_type == 'baseline':
-                option = _vec_norm(phi_target_obs - phi_obs0)
-            elif 'Projection' in option_type:
-                option = Psi(phi_target_obs, phi_obs0)
-                # option = _vec_norm(option)
-            elif 'uniform' in option_type:
+            if hasattr(env, 'get_target_obs'):
+                print("ENV HAS ATTRIBUTE get_target_obs")
+                target_obs = env.get_target_obs(obs_0, tensor_goal)
+                phi_target_obs = agent_traj_encoder(target_obs).mean
+                if option_type == 'baseline':
+                    option = _vec_norm(phi_target_obs - phi_obs0)
+                elif 'Projection' in option_type:
+                    option = Psi(phi_target_obs, phi_obs0)
+                    # option = _vec_norm(option)
+                elif 'uniform' in option_type:
+                    option = torch.tensor(options[j]).unsqueeze(0).to(device).float()
+            else:
+                print("ENV DID NOT IMPLEMENT ATTRIBUTE get_target_obs")
+                # Fallback for MiniGrid if get_target_obs missing
                 option = torch.tensor(options[j]).unsqueeze(0).to(device).float()
 
         Repr_obs_list = []
@@ -281,28 +544,66 @@ def eval_cover_rate(env, agent_traj_encoder, agent_policy, dim_option, device, a
             action, agent_info = agent_policy.get_action(obs_option)
             # interact with the env
             obs, reward, dones, info = env.step(action)
-            gt_dist = np.linalg.norm(goal - obs[:2])
-            traj_list["observation"].append(obs)
             
-            if hasattr(env.env, 'get_xy'):
-                info['x'], info['y'] = env.env.get_xy()
+            if 'minigrid' in env.env_name.lower():
+                # print("MINIGRIDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDd")
+                # MiniGrid: Extract integer coordinates from unwrapped env
+                # agent_pos = env.unwrapped.agent_pos
+                # info['x'], info['y'] = agent_pos[0], agent_pos[1]
+                # # Use Euclidean or Manhattan distance for grid
+                # gt_dist = np.linalg.norm(goal - np.array(agent_pos))
+                # current_coords = np.array(agent_pos)
+
+                # current_coords = info['coordinates']
+                # # Check arrival against Logic Goal (not scaled)
+                # gt_dist = np.linalg.norm(goal - current_coords)
+                current_coords = obs[:2]
+
+                gt_dist = np.linalg.norm(goal - current_coords)
+                if hasattr(env.env, 'get_xy'):
+                    info['x'], info['y'] = env.env.get_xy()
+                else:
+                    info['x'], info['y'] = obs[0], obs[1]
             else:
-                info['x'], info['y'] = obs[0], obs[1]
+                # Standard Maze2d Logic
+                current_coords = obs[:2]
+
+                gt_dist = np.linalg.norm(goal - current_coords)
+                if hasattr(env.env, 'get_xy'):
+                    info['x'], info['y'] = env.env.get_xy()
+                else:
+                    info['x'], info['y'] = obs[0], obs[1]
+
+            # gt_dist = np.linalg.norm(goal - obs[:2])
             
+            # if hasattr(env.env, 'get_xy'):
+            #     info['x'], info['y'] = env.env.get_xy()
+            # else:
+            #     info['x'], info['y'] = obs[0], obs[1]
+            
+            traj_list["observation"].append(obs)
             traj_list["info"].append(info)
             if 'env_infos' not in Cover_list:
                 Cover_list['env_infos'] = {}
                 Cover_list['env_infos']['coordinates'] = []
                 Cover_list['env_infos']['next_coordinates'] = []
-            Cover_list['env_infos']['coordinates'].append(obs[:2])
-            Cover_list['env_infos']['next_coordinates'].append(obs[:2])
+            # Cover_list['env_infos']['coordinates'].append(obs[:2])
+            # Cover_list['env_infos']['next_coordinates'].append(obs[:2])
+            Cover_list['env_infos']['coordinates'].append(current_coords)
+            Cover_list['env_infos']['next_coordinates'].append(current_coords)
+            
             obs = torch.tensor(obs).unsqueeze(0).to(device).float()
             gt_reward = - gt_dist / (30 * max_path_length)
             gt_return_list.append(gt_reward)
             if -gt_dist > dist_theld:
                 arrive = 1
-                print('arrive', goal)
-                ax.scatter(goal[0], goal[1], s=100, marker='o', alpha=1, edgecolors='black')
+                # ax.scatter(goal[0], goal[1], s=100, marker='o', alpha=1, edgecolors='black')
+                # ax.scatter(goal[0], goal[1], s=100, marker='*', alpha=1, edgecolors='white', color='gold')
+                # Plot Arrival Star (Scaled)
+                # p_x = current_coords[0] * tile_size if 'minigrid' in env.env_name.lower() else current_coords[0]
+                # p_y = current_coords[1] * tile_size if 'minigrid' in env.env_name.lower() else current_coords[1]
+                print('arrive', (plot_goal_x, plot_goal_y))
+                ax.scatter(plot_goal_x, plot_goal_y, s=120, marker='*', alpha=1, edgecolors='white', color='gold')
                 if option_type != 'random':
                     break
         
@@ -449,7 +750,8 @@ def PlotMazeTrajDist(env, SZN, input_token, agent_traj_encoder, qf1, qf2, alpha,
     FD = np.array(FinallDistanceList).mean()
     AR = np.array(ArriveList).mean()
     print("FD:", FD, '\n', "AR:", AR)
-    ax[0,0] = plot_trajectories(env, All_trajs_list, fig, ax[0,0])
+    # ax[0,0] = plot_trajectories(env, All_trajs_list, fig, ax[0,0])
+    ax[0,0] = plot_trajectories_local(env, All_trajs_list, fig, ax[0,0], tile_size)
     ax[1,0] = PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=max_path_length, is_goal=True, ax=ax[1,0])
     ax[1,1] = viz_SZN_dist_circle(SZN, input_token, path, psi_z=None, ax=ax[1,1])
 
@@ -480,7 +782,8 @@ def PlotMazeTrajWindowDist(env, window, agent_traj_encoder, qf1, qf2, alpha, pol
     FD = np.array(FinallDistanceList).mean()
     AR = np.array(ArriveList).mean()
     print("FD:", FD, '\n', "AR:", AR)
-    ax[0,0] = plot_trajectories(env, All_trajs_list, fig, ax[0,0])
+    # ax[0,0] = plot_trajectories(env, All_trajs_list, fig, ax[0,0])
+    ax[0,0] = plot_trajectories_local(env, All_trajs_list, fig, ax[0,0], tile_size)
     ax[1,0] = PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=max_path_length, is_goal=True, ax=ax[1,0])
     ax[1,1] = viz_dist_circle(window, path, psi_z=None, ax=ax[1,1])
     
@@ -496,24 +799,91 @@ def PlotMazeTrajWindowDist(env, window, agent_traj_encoder, qf1, qf2, alpha, pol
 
 
 
+# @torch.no_grad()
+# def PlotMazeTraj(env, agent_traj_encoder, policy, device, Psi, dim_option=2, max_path_length=300, path='./', option_type=None): 
+#     obs0 = env.reset()
+#     fig, ax = plt.subplots(1,2, figsize=(16,8))
+#     env.draw(ax[0])
+#     ax[0].set_title('State of Traj. in Maze')
+        
+#     if Psi is None:
+#         Psi = Psi_baseline
+ 
+#     ax[0], FinallDistanceList, All_Repr_obs_list, All_Goal_obs_list, All_trajs_list, FinallDistanceList, ArriveList, All_Cover_list = eval_cover_rate(env, agent_traj_encoder, policy, dim_option, device, ax=ax[0], max_path_length=max_path_length, Psi=Psi, option_type=option_type)
+#     # calculate metrics
+#     FD = np.array(FinallDistanceList).mean()
+#     AR = np.array(ArriveList).mean()
+#     print("FD:", FD, '\n', "AR:", AR)
+#     #ax[0] = plot_trajectories(env, All_trajs_list, fig, ax[0], cover_list=All_Cover_list)
+#     #ax[0] = plot_trajectories(env, All_Cover_list, fig, ax[0])
+#     ax[0] = plot_trajectories(env, All_trajs_list, fig, ax[0])
+#     ax[1] = PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=max_path_length, is_goal=False, ax=ax[1])
+    
+#     filepath = path + "-Maze_traj.png"
+#     plt.savefig(filepath) 
+#     print(filepath)
+    
+#     eval_metrics = calc_eval_metrics(All_Cover_list, is_option_trajectories=True)
+#     print('[eval_metrics]:', eval_metrics)
+    
+#     return FD, AR, eval_metrics
+    
 @torch.no_grad()
 def PlotMazeTraj(env, agent_traj_encoder, policy, device, Psi, dim_option=2, max_path_length=300, path='./', option_type=None): 
     obs0 = env.reset()
     fig, ax = plt.subplots(1,2, figsize=(16,8))
-    env.draw(ax[0])
-    ax[0].set_title('State of Traj. in Maze')
+    
+    # --- MODIFICATION START ---
+    # if 'minigrid' in env.env_name.lower():
+    #     # Render RGB image from MiniGrid
+    #     # Depending on your wrapper, you might need env.render() or env.unwrapped.render()
+    #     img = env.render(mode='rgb_array') 
+    #     if img is None: # fallback if render returns nothing
+    #         img = env.unwrapped.render(mode='rgb_array', highlight=False)
+            
+    #     # Display image (origin='upper' is default for images, matches Minigrid coords)
+    #     ax[0].imshow(img)
+
+    #     # Set limits based on grid size
+    #     # width = env.unwrapped.width
+    #     # height = env.unwrapped.height
         
+    #     # ax[0].set_xlim(0, width)
+    #     # ax[0].set_ylim(height, 0) # Invert Y to match Minigrid (0,0 is top-left)
+    #     # ax[0].set_aspect('equal')
+    #     # ax[0].grid(True)
+
+    #     # Ensure axis limits match grid size if you want to overlay scatter plots correctly
+    #     # You might need to scale scatter points if img size != grid size
+    #     # Usually simpler to just use imshow and let scatter plot interact with pixel coords 
+    #     # OR, render tile_size=1 to map 1-to-1
+    # else:
+    # env.draw(ax[0])
+    # --- MODIFICATION END ---
+    # --- DRAW ENVIRONMENT ---
+    # env.draw(ax[0]) # This calls ax.imshow() for MiniGrid
+    ax[0].set_title('State of Traj. in Maze')
+    
     if Psi is None:
         Psi = Psi_baseline
  
+    # Call the modified eval_cover_rate
     ax[0], FinallDistanceList, All_Repr_obs_list, All_Goal_obs_list, All_trajs_list, FinallDistanceList, ArriveList, All_Cover_list = eval_cover_rate(env, agent_traj_encoder, policy, dim_option, device, ax=ax[0], max_path_length=max_path_length, Psi=Psi, option_type=option_type)
+    
     # calculate metrics
     FD = np.array(FinallDistanceList).mean()
     AR = np.array(ArriveList).mean()
     print("FD:", FD, '\n', "AR:", AR)
-    #ax[0] = plot_trajectories(env, All_trajs_list, fig, ax[0], cover_list=All_Cover_list)
-    #ax[0] = plot_trajectories(env, All_Cover_list, fig, ax[0])
-    ax[0] = plot_trajectories(env, All_trajs_list, fig, ax[0])
+
+    # Important: If using Minigrid with imshow, you might need to adjust the trajectory plotter
+    # to ensure the points align with the image.
+    # Assuming eval_cover_rate returns integer coords (x,y), and you used standard render:
+    # Minigrid render usually outputs a high-res image (e.g. 32px per tile).
+    # You might need to multiply coords by tile_size.
+    
+    # FIX for Scatter alignment on Image:
+    # ax[0] = plot_trajectories(env, All_trajs_list, fig, ax[0])
+    ax[0] = plot_trajectories_local(env, All_trajs_list, fig, ax[0])
     ax[1] = PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=max_path_length, is_goal=False, ax=ax[1])
     
     filepath = path + "-Maze_traj.png"
@@ -524,7 +894,6 @@ def PlotMazeTraj(env, agent_traj_encoder, policy, device, Psi, dim_option=2, max
     print('[eval_metrics]:', eval_metrics)
     
     return FD, AR, eval_metrics
-    
     
     
 def UpdateGMM(dists, GMM=None, mix_dist_prob=None, device='cuda'):

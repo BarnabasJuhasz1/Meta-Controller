@@ -30,7 +30,7 @@ class _SimpleMiniGrid(MiniGridEnv):
         self._agent_start_pos = agent_start_pos
         self._agent_start_dir = agent_start_dir
 
-        mission_space = MissionSpace(mission_func=lambda: "reach the goal")
+        mission_space = MissionSpace(mission_func=lambda: "testing")
 
         if max_steps is None:
             max_steps = 4 * size**2
@@ -62,7 +62,7 @@ class _SimpleMiniGrid(MiniGridEnv):
             self.place_agent()
 
         self.grid = grid
-        self.mission = "reach the goal"
+        self.mission = "testing"
 
 
 class BaselineMiniGridEnv(gym.Env):
@@ -73,9 +73,9 @@ class BaselineMiniGridEnv(gym.Env):
         size=10,
         action_scale=1.0,
         max_steps=None,
-        #render_mode="rgb_array",
-        #render_mode="human",
-        render_mode=None,
+        render_mode="rgb_array",
+        # render_mode="human",
+        # render_mode=None,
         env_name="minigrid",
     ):
         super().__init__()
@@ -161,8 +161,23 @@ class BaselineMiniGridEnv(gym.Env):
         self._last_obs = next_obs
         return next_obs, reward, done, info
 
+    # def render(self, mode="rgb_array", **kwargs):
+    #     return self._env.render()
+
     def render(self, mode="rgb_array", **kwargs):
-        return self._env.render()
+        # --- FIX START: Robust Render ---
+        # Try standard render
+        frame = self._env.render()
+        
+        # If frame is None (likely due to render_mode mismatch or gym version issues), 
+        # force generation of the frame using the minigrid method directly.
+        if frame is None:
+            if hasattr(self._env, 'get_frame'):
+                # Standard tile_size for minigrid is 32
+                frame = self._env.get_frame(highlight=False, tile_size=32)
+            elif hasattr(self._env.unwrapped, 'get_frame'):
+                frame = self._env.unwrapped.get_frame(highlight=False, tile_size=32)
+
 
     def render_trajectories(self, trajectories, colors, plot_axis, ax):
         for trajectory, color in zip(trajectories, colors):

@@ -112,13 +112,15 @@ class RSD(IOD):
         self.pixel_shape = pixel_shape
 
         assert self._trans_optimization_epochs is not None
+        # print("TRANS OPTIM EPOCHS: ", self._trans_optimization_epochs)
         
         # added 
         self.last_w = None
         self.epoch_data = None
         
         self.method = {
-            "eval": 'random',
+            # "eval": 'random',
+            "eval": 'Projection',
             "phi": phi_type,
             "policy": policy_type,
             "explore": explore_type,

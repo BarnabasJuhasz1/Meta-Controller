@@ -46,6 +46,12 @@ train_results/
 jobs/
 visualizations/
 
+# experiments
+*exp/
+# checkpoints
+*.pt
+*.pkl
+
 # vim stuff
 *.swp
 

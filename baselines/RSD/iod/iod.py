@@ -23,7 +23,7 @@ import os
 # from iod.ant_eval import *
 from iod.viz_utils import *
 from iod.agent import *
-from iod.viz_utils import PlotMazeTrajDist, PlotMazeTrajWindowDist, viz_dist_circle, PlotGMM
+from iod.viz_utils import PlotMazeTrajDist, PlotMazeTrajWindowDist, viz_dist_circle, PlotGMM, plot_trajectories_local
 
 
 class IOD(RLAlgorithm):
@@ -264,11 +264,104 @@ class IOD(RLAlgorithm):
                 Pepr_viz = True
                 #if 'maze' in self.env_name or 'lm' in self.env_name:
                 # changed to: because 'maze_env.py' wrapper does not implement 'draw' function and we get an exception
+                # if 'antmaze' in self.env_name or 'lm' in self.env_name or 'minigrid' in self.env_name:
+                #     fig, ax = plt.subplots(1, 2, figsize=(15, 6))
+                #     fig.suptitle("Epoch:" + str(runner.step_itr))
+                #     env = runner._env
+                #     env.draw(ax[0])
+                #     list_viz_traj = []
+                #     All_Repr_obs_list = []
+                #     All_Goal_obs_list = []
+                #     for i in range(len(trajectories)):
+                #         # plot phi
+                #         if Pepr_viz:
+                #             if self.method['phi'] == 'Projection':
+                #                 psi_s = self.Psi(self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean).cpu().numpy()
+                #             else:
+                #                 psi_s = self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean.cpu().numpy()
+                #             psi_g = trajectories[i]['agent_infos']['option']
+                #             All_Repr_obs_list.append(psi_s)
+                #             All_Goal_obs_list.append(psi_g)
+                        
+                #         # plot the subgoal
+                #         if 'sub_goal' in trajectories[i]['agent_infos'].keys():
+                #             sub_goal = trajectories[i]['agent_infos']['sub_goal'][0]
+                #             ax.scatter(sub_goal[0], sub_goal[1], s=50, marker='x', alpha=1, edgecolors='black', label='target.'+str(i))
+                #         # plot the traj
+                #         viz_traj = {}
+                #         viz_traj['observation'] = trajectories[i]['observations']
+                #         viz_traj['info'] = []
+                #         for j in range(len(trajectories[i]['observations'])):
+                #             viz_traj['info'].append({'x':viz_traj['observation'][j][0], 'y':viz_traj['observation'][j][1]})
+                #         list_viz_traj.append(viz_traj)
+                #     # plot_trajectories(env, list_viz_traj, fig, ax[0])
+                #     plot_trajectories_local(env, list_viz_traj, fig, ax[0])
+                # changed to: because 'maze_env.py' wrapper does not implement 'draw' function and we get an exception
+                # Inside iod.py, inside _get_trajectories, before the if 'antmaze'... block
+                print("DEBUG: Wrapper Stack -----------------")
+                curr = runner._env
+                print(type(curr))
+                while hasattr(curr, 'env'):
+                    curr = curr.env
+                    print(type(curr))
+                    
+                print("DEBUG: Testing Render ----------------")
+                try:
+                    # Try rendering from the top-level garage runner
+                    img_test = runner._env.render(mode='rgb_array')
+                    print(f"Top level render result type: {type(img_test)}")
+                except Exception as e:
+                    print(f"Top level render failed: {e}")
+
+                try:
+                    # Try rendering from the unwrapped core
+                    img_test_2 = runner._env.unwrapped.render()
+                    print(f"Unwrapped render result type: {type(img_test_2)}")
+                except Exception as e:
+                    print(f"Unwrapped render failed: {e}")
+                print("--------------------------------------")
+
+                # Inside iod.py -> _get_trajectories
+
                 if 'antmaze' in self.env_name or 'lm' in self.env_name or 'minigrid' in self.env_name:
                     fig, ax = plt.subplots(1, 2, figsize=(15, 6))
                     fig.suptitle("Epoch:" + str(runner.step_itr))
                     env = runner._env
-                    env.draw(ax[0])
+                    
+                    # --- START FIX: Nuclear Option for MiniGrid Rendering ---
+                    tile_size = 1
+                    if 'minigrid' in self.env_name:
+                        tile_size = 32  # Standard MiniGrid tile size
+                        
+                        # 1. Unwrap Garage wrappers to find BaselineMiniGridEnv
+                        # We loop until we find the class that holds the actual '_env' attribute
+                        inner = env
+                        while hasattr(inner, 'env'):
+                            # If we hit BaselineMiniGridEnv (which inherits from gym.Env), it has ._env
+                            if hasattr(inner, '_env'):
+                                break
+                            inner = inner.env
+                        
+                        # 2. Extract the core _SimpleMiniGrid
+                        # BaselineMiniGridEnv stores the actual minigrid instance in self._env
+                        img = None
+                        if hasattr(inner, '_env'):
+                            minigrid_core = inner._env
+                            # 3. Force generation of the frame directly
+                            # get_frame() is the low-level method that render() calls internally
+                            if hasattr(minigrid_core, 'get_frame'):
+                                img = minigrid_core.get_frame(highlight=False, tile_size=tile_size)
+                        
+                        if img is not None:
+                            ax[0].imshow(img)
+                            ax[0].set_axis_off()
+                        else:
+                            print("WARNING: Failed to extract MiniGrid frame. Check wrapper stack.")
+                            
+                    elif hasattr(env, 'draw'):
+                        env.draw(ax[0])
+                    # --- END FIX ---
+
                     list_viz_traj = []
                     All_Repr_obs_list = []
                     All_Goal_obs_list = []
@@ -286,15 +379,37 @@ class IOD(RLAlgorithm):
                         # plot the subgoal
                         if 'sub_goal' in trajectories[i]['agent_infos'].keys():
                             sub_goal = trajectories[i]['agent_infos']['sub_goal'][0]
-                            ax.scatter(sub_goal[0], sub_goal[1], s=50, marker='x', alpha=1, edgecolors='black', label='target.'+str(i))
+                            # Scale sub_goal by tile_size
+                            ax[0].scatter(sub_goal[0]*tile_size, sub_goal[1]*tile_size, s=50, marker='x', alpha=1, edgecolors='black', label='target.'+str(i))
+                        
                         # plot the traj
                         viz_traj = {}
                         viz_traj['observation'] = trajectories[i]['observations']
                         viz_traj['info'] = []
+                        # for j in range(len(trajectories[i]['observations'])):
+                        #     viz_traj['info'].append({'x':viz_traj['observation'][j][0], 'y':viz_traj['observation'][j][1]})
+                        # --- FIX START: Use 'coordinates' from env_infos if available ---
+                        # MiniGrid stores real x,y in env_infos. Maze2D stores them in observations.
+                        use_env_infos = 'coordinates' in trajectories[i]['env_infos']
+                        
                         for j in range(len(trajectories[i]['observations'])):
-                            viz_traj['info'].append({'x':viz_traj['observation'][j][0], 'y':viz_traj['observation'][j][1]})
+                            if use_env_infos:
+                                # Extract from env_infos (MiniGrid case)
+                                # coord is [x, y]
+                                coord = trajectories[i]['env_infos']['coordinates'][j]
+                                viz_traj['info'].append({'x': coord[0], 'y': coord[1]})
+                            else:
+                                # Fallback to observation (Maze2D case)
+                                viz_traj['info'].append({
+                                    'x': viz_traj['observation'][j][0], 
+                                    'y': viz_traj['observation'][j][1]
+                                })
+                        # --- FIX END ---
                         list_viz_traj.append(viz_traj)
-                    plot_trajectories(env, list_viz_traj, fig, ax[0])
+                    
+                    # Pass tile_size to the local plotter
+                    plot_trajectories_local(env, list_viz_traj, fig, ax[0], tile_size=tile_size)
+                    # --- FIX END ---
                     title_txt = "train_policy: " + str(self.train_policy) + "\n train_phi: " + str(self.train_phi)
                     ax[0].set_title(title_txt)
                     ax[0].legend(loc='lower right')
