@@ -165,17 +165,15 @@ class RSD(IOD):
         self.SZN_w2 = SZN_w2
         self.SZN_w3 = SZN_w3
         self.SZN_window_size = SZN_window_size
-        self.SZN_repeat_time = SZN_repeat_time
-        
-        self.Repr_max_step = Repr_max_step
-        self.SfReprBuffer = []
-        
-        self.z_unit = z_unit
-    
-        self.train_policy = False
-        self.train_phi = False
-        self.save_debug = False
-    
+        def train_once(self, itr, paths, runner, extra_scalar_metrics={}):
+            logging_enabled = ((runner.step_itr + 1) % self.n_epochs_per_log == 0)
+
+            data = self.process_samples(paths)
+            time_computing_metrics = [0.0]
+            time_training = [0.0]
+
+            with MeasureAndAccTime(time_training):
+                tensors = self._train_once_inner(data, runner)
     
     # Psi is a projection function applied to latent states 𝜙(x)
     # it is used to map latent vectors into a bounded space
@@ -692,7 +690,13 @@ class RSD(IOD):
         # 1. Similarity Reward
         # “Reward the agent for moving from s to s′ in the direction of the skill embedding.”
         delta_norm = self.norm((psi_s_next - psi_s))
-        direction_sim = (1 * (psi_s_next - psi_s) * self.vec_norm(psi_g - psi_s.detach())).sum(dim=-1)        
+        
+        if self.discrete:
+             masks = (psi_g - psi_g.mean(dim=1, keepdim=True)) * self.dim_option / (self.dim_option - 1 if self.dim_option != 1 else 1)
+             direction_sim = (1 * (psi_s_next - psi_s) * masks).sum(dim=-1)
+        else:
+             direction_sim = (1 * (psi_s_next - psi_s) * self.vec_norm(psi_g - psi_s.detach())).sum(dim=-1)        
+        
         phi_obj = direction_sim 
 
         # 2. Goal Arrival Reward

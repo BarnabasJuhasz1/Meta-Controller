@@ -53,7 +53,7 @@ def make_env(args, max_path_length, render_mode=None):
         env = MazeWrapper("maze2d-large-v1", random_init=False)
 
     elif args.env == 'minigrid':
-        from envs.baseline_minigrid import BaselineMiniGridEnv
+        from envs.minigrid_env import BaselineMiniGridEnv
         env = BaselineMiniGridEnv(max_steps=max_path_length, render_mode=render_mode)
     
     else:
@@ -124,7 +124,7 @@ def make_env_wo_args(**kwargs):
         env = MazeWrapper("maze2d-large-v1", random_init=False)
 
     elif args.env == 'minigrid':
-        from envs.baseline_minigrid import BaselineMiniGridEnv
+        from envs.minigrid import BaselineMiniGridEnv
         env = BaselineMiniGridEnv(max_steps=args.max_path_length)
     
     else:

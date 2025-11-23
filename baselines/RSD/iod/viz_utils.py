@@ -256,7 +256,7 @@ def calc_eval_metrics(trajectories, is_option_trajectories, coord_dims=[0,1]):
     return eval_metrics
 
 # save the traj. as fig
-def PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=100, is_PCA=False, is_goal=True, ax=None):
+def PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=100, is_PCA=True, is_goal=True, ax=None):
     Repr_obs_array = np.array(All_Repr_obs_list[0])
     if is_goal:
         All_Goal_obs_array = np.array(All_Goal_obs_list[0])
@@ -269,6 +269,8 @@ def PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=100, is_P
         pca = PCA(n_components=2)
         # 对数据进行 PCA
         Repr_obs_2d = pca.fit_transform(Repr_obs_array)
+        if is_goal:
+            All_Goal_obs_2d = pca.transform(All_Goal_obs_array)
     else:# # # Window Dist：
 
         Repr_obs_2d = Repr_obs_array
