@@ -165,22 +165,29 @@ class RSD(IOD):
         self.SZN_w2 = SZN_w2
         self.SZN_w3 = SZN_w3
         self.SZN_window_size = SZN_window_size
-        def train_once(self, itr, paths, runner, extra_scalar_metrics={}):
-            logging_enabled = ((runner.step_itr + 1) % self.n_epochs_per_log == 0)
-
-            data = self.process_samples(paths)
-            time_computing_metrics = [0.0]
-            time_training = [0.0]
-
-            with MeasureAndAccTime(time_training):
-                tensors = self._train_once_inner(data, runner)
+        self.SZN_repeat_time = SZN_repeat_time
+        
+        self.Repr_max_step = Repr_max_step
+        self.SfReprBuffer = []
+        
+        self.z_unit = z_unit
+    
+        self.train_policy = False
+        self.train_phi = False
+        self.save_debug = False
+        
+        # Initialize debugging counter
+        self._debug_epoch_counter = 0
+    
     
     # Psi is a projection function applied to latent states 𝜙(x)
     # it is used to map latent vectors into a bounded space
     def Psi(self, phi_x, phi_x0=None):
         if 'Projection' in self.method['phi']:  
-            # print("USING PROJECTION") 
-            return torch.tanh(2/self.max_path_length * (phi_x))
+            # FIXED: Original scaling (2/max_path_length) was too small for long episodes
+            # With max_path_length=150: 2/150=0.0133 squashed everything to ~0
+            # Using fixed scaling instead: allows learning while keeping bounded
+            return torch.tanh(1.0 * phi_x)  # Scale by 1.0 instead of 2/max_path_length
         else:
             # print("BASELINE, THIS SHOULD NOT RUN") 
             return phi_x
@@ -241,6 +248,13 @@ class RSD(IOD):
 
 
     def get_confidence_mix(self, buffer : list, dist_z, num_dist):
+        # Handle empty buffer case. 
+        # NOTE: 'buffer' corresponds to 'last_trial', which is initialized to [] and remains empty 
+        # until the first SZN update cycle completes. On the very first call, it IS empty, 
+        # so we must handle this case to avoid shape mismatch errors.
+        if len(buffer) == 0:
+            return torch.zeros((num_dist,), device=self.device)
+        
         sf_repr_buffer_tensor = torch.tensor(np.array(buffer)).to(self.device)
         x = sf_repr_buffer_tensor.unsqueeze(0).repeat(num_dist,1,1)
         p_sf = torch.zeros((num_dist,1)).to(self.device)
@@ -563,10 +577,22 @@ class RSD(IOD):
                 self._update_rewards(tensors, v)
             self._optimize_op(tensors, v)
 
+
         if self.NumSampleTimes == 1:
             self.save_debug = True
         else:
             self.save_debug = False
+        
+        # ===== AUTOMATED COLLAPSE DEBUGGING =====
+        # Run debugging periodically to avoid slowdown
+        if wandb.run is not None:
+            self._debug_epoch_counter = getattr(self, '_debug_epoch_counter', 0) + 1
+            
+            # Debug every 50 epochs or when SampleZPolicy is updated (NumSampleTimes == 1)
+            if self._debug_epoch_counter % 50 == 0 or self.NumSampleTimes == 1:
+                print(f"\n[DEBUG] Running collapse diagnostics (counter: {self._debug_epoch_counter})...")
+                self._debug_collapse(v, tensors)
+        # ===== END DEBUGGING =====
             
         return tensors
 
@@ -773,9 +799,15 @@ class RSD(IOD):
 
             if 'psi_s' in v.keys():
                 ##  using norm
+                # For discrete skills with spatial exploration, the standard Lipschitz constraint
+                # is too restrictive. We keep it for stability but make it very loose.
+                # REVERTED: The original code implements a Lipschitz constraint (Upper Bound).
+                # Flipping it created a Lower Bound (forcing movement) which destabilized training.
                 cst_penalty_1 = 1 / self.max_path_length - self.norm(v['psi_s'] - v['psi_s_next'])
+                
                 cst_penalty_2 = -self.norm(v['psi_s_0'])
-                cst_penalty = torch.clamp(cst_penalty_1, max=self.dual_slack * 1 / self.max_path_length)
+                # Use a looser clamp to allow spatial spread
+                cst_penalty = torch.clamp(cst_penalty_1, max=self.dual_slack)
                 
                 te_obj = rewards + dual_lam.detach() * cst_penalty + cst_penalty_2
                 v.update({
@@ -865,6 +897,76 @@ class RSD(IOD):
         sac_utils.update_loss_alpha(
             self, tensors, v, alpha=self.log_alpha, loss_type='', 
         )
+
+    def _debug_collapse(self, v, tensors):
+        """
+        Debug method to detect model collapse.
+        Checks skill generator, encoder, and policy for collapse signs.
+        """
+        try:
+            from debug_collapse import CollapseDebugger
+            import os
+            
+            debugger = CollapseDebugger(
+                log_to_wandb=True, 
+                save_dir=os.path.join(wandb.run.dir, 'debug') if wandb.run is not None else './debug'
+            )
+            
+            all_metrics = {}
+            
+            # 1. Check skill generator
+            print("\n[DEBUG] Checking skill generator...")
+            sg_metrics = debugger.check_skill_generator(
+                self.SampleZPolicy, 
+                self.input_token, 
+                discrete=self.discrete, 
+                dim_option=self.dim_option
+            )
+            all_metrics.update(sg_metrics)
+            
+            # 2. Check encoder
+            print("[DEBUG] Checking encoder...")
+            enc_metrics = debugger.check_encoder(
+                self.traj_encoder,
+                v['obs'][:100] if len(v['obs']) >= 100 else v['obs'],
+                v['options'][:100] if 'options' in v and len(v['options']) >= 100 else (v['options'] if 'options' in v else None)
+            )
+            all_metrics.update(enc_metrics)
+            
+            # 3. Check policy
+            print("[DEBUG] Checking policy...")
+            pol_metrics = debugger.check_policy(
+                self.option_policy,
+                v['obs'][:50] if len(v['obs']) >= 50 else v['obs'],
+                v['options'][:50] if 'options' in v and len(v['options']) >= 50 else (v['options'] if 'options' in v else None)
+            )
+            all_metrics.update(pol_metrics)
+            
+            # 4. Diagnose
+            print("[DEBUG] Diagnosing collapse...")
+            diagnosis = debugger.diagnose_collapse(all_metrics)
+            print("\n" + "="*80)
+            print("COLLAPSE DIAGNOSIS:")
+            print("="*80)
+            print(diagnosis['summary'])
+            print("="*80 + "\n")
+            
+            # Log diagnosis to WandB
+            if wandb.run is not None:
+                wandb.log({
+                    'debug/skill_generator_healthy': diagnosis['skill_generator_healthy'],
+                    'debug/encoder_healthy': diagnosis['encoder_healthy'],
+                    'debug/policy_healthy': diagnosis['policy_healthy'],
+                    'debug/num_issues': len(diagnosis['issues']),
+                })
+            
+        except ImportError as e:
+            print(f"[DEBUG] Could not import debug_collapse module: {e}")
+            print("[DEBUG] Make sure debug_collapse.py is in the same directory as RSD.py")
+        except Exception as e:
+            print(f"[DEBUG] Error during debugging: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     '''

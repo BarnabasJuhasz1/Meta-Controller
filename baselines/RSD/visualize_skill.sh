@@ -3,10 +3,10 @@
 
 
 python scripts/visualize_skill.py \
-    --checkpoint_dir /home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/exp/RSD_exp/minigrid_500_discrete_PLEASE_PLEASE2sd042_1763917484_minigrid_RSD \
-    --epoch 100 \
-    --skill 1 \
-    --max_steps 75 \
-    --env minigrid
+    --checkpoint_dir /home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/exp/RSD_exp/mini_8d_1k_cont_obs_fixedsd042_1764074471_minigrid_RSD \
+    --epoch 75 \
+    --max_steps 50 \
+    --env minigrid \
+    --save_gif \
+    --fps 8
 
-    

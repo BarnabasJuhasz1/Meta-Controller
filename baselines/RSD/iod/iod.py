@@ -260,7 +260,8 @@ class IOD(RLAlgorithm):
         '''
         with torch.no_grad():
             # if (runner.step_itr + 2) % self.n_epochs_per_log == 0 and wandb.run is not None:
-            if wandb.run is not None and self.method['phi'] != 'baseline':
+            # FIXED: removed phi != 'baseline' check - we want plots for both Projection and baseline
+            if wandb.run is not None:
                 Pepr_viz = True
                 #if 'maze' in self.env_name or 'lm' in self.env_name:
                 # changed to: because 'maze_env.py' wrapper does not implement 'draw' function and we get an exception
@@ -436,24 +437,63 @@ class IOD(RLAlgorithm):
                         wandb.log(({"train_Maze_traj": wandb.Image(filepath)}))
 
                 else:
-                    fig, ax = plt.subplots()
+                    # FIXED: baseline mode should also generate full trajectory plots
+                    # Previously only Z-space visualization was created, now matches Projection mode
+                    fig, ax = plt.subplots(1, 2, figsize=(12, 5))
                     env = runner._env
                     list_viz_traj = []
                     All_Repr_obs_list = []
                     All_Goal_obs_list = []
+                    
+                    # Use same tile_size logic as Projection mode
+                    tile_size = 32
+                    
                     for i in range(len(trajectories)):
-                        # plot phi
-                        if Pepr_viz:
-                            if self.method['phi'] == 'Projection':
-                                psi_s = self.Psi(self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean).cpu().numpy()
+                        viz_traj = {}
+                        viz_traj['observation'] = trajectories[i]['observations']
+                        viz_traj['next_observation'] = trajectories[i]['next_observations']
+                        viz_traj['option'] = trajectories[i]['agent_infos']['option']
+                        viz_traj['info'] = []
+                        
+                        use_env_infos = 'coordinates' in trajectories[i]['env_infos']
+                        for j in range(len(trajectories[i]['observations'])):
+                            if use_env_infos:
+                                coord = trajectories[i]['env_infos']['coordinates'][j]
+                                viz_traj['info'].append({'x': coord[0], 'y': coord[1]})
                             else:
-                                psi_s = self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean.cpu().numpy()
+                                viz_traj['info'].append({
+                                    'x': viz_traj['observation'][j][0], 
+                                    'y': viz_traj['observation'][j][1]
+                                })
+                        list_viz_traj.append(viz_traj)
+                        
+                        # Plot phi (encoder representations)
+                        if Pepr_viz:
+                            # No need to check method['phi'] - baseline uses encoder output directly
+                            psi_s = self.traj_encoder(torch.tensor(trajectories[i]['observations']).to(self.device)).mean.cpu().numpy()
                             psi_g = trajectories[i]['agent_infos']['option']
                             All_Repr_obs_list.append(psi_s)
                             All_Goal_obs_list.append(psi_g)
-        
+                    
+                    # Plot environment trajectories (left subplot)
+                    plot_trajectories_local(env, list_viz_traj, fig, ax[0], tile_size=tile_size)
+                    title_txt = "train_policy: " + str(self.train_policy) + "\n train_phi: " + str(self.train_phi)
+                    ax[0].set_title(title_txt)
+                    ax[0].legend(loc='lower right')
+                    
+                    # Plot Z-space trajectories (right subplot)
                     path = wandb.run.dir
-                    PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=self.max_path_length, is_goal=True)
+                    # Baseline doesn't have bounded space, so don't set fixed limits
+                    # ax[1] limits will be set automatically by PCA_plot_traj
+                    PCA_plot_traj(All_Repr_obs_list, All_Goal_obs_list, path, path_len=self.max_path_length, is_goal=True, ax=ax[1])
+                    
+                    # Save and log
+                    filepath = os.path.join(path, "train_Maze_traj.png")
+                    print(filepath)
+                    plt.savefig(filepath) 
+                    plt.close()
+                    if self.save_debug == True or runner.step_itr % self.n_epochs_per_eval == 0:
+                        wandb.log(({"train_Maze_traj": wandb.Image(filepath)}))
   
         return trajectories
 

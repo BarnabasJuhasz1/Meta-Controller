@@ -34,4 +34,16 @@ export D4RL_SUPPRESS_IMPORT_ERROR=1
 
 # python tests/main.py --run_group RSD_exp --env minigrid --max_path_length 75 --seed 42 --traj_batch_size 128 --n_parallel 16 --n_epochs_per_eval 50 --n_epochs_per_save 25 --n_epochs_per_pt_save 25 --dim_option 8  --algo RSD --exp_name minigrid_500_discrete_PLEASE_PLEASE2 --phi_type Projection --explore_type SZN  --trans_optimization_epochs 50  --is_wandb 1  --SZN_w2 3 --SZN_w3 1 --SZN_window_size 5 --SZN_repeat_time 2 --n_epochs 1001 --Repr_max_step 75 --dual_slack 1e-4 --discrete 1
 
-python tests/main.py --run_group RSD_exp --env minigrid --max_path_length 75 --seed 42 --traj_batch_size 128 --n_parallel 16 --n_epochs_per_eval 50 --n_epochs_per_save 25 --n_epochs_per_pt_save 25 --dim_option 8  --algo RSD --exp_name minigrid_500_discrete_PLEASE_PLEASE2 --phi_type Projection --explore_type SZN  --trans_optimization_epochs 30  --is_wandb 1  --SZN_w2 1 --SZN_w3 5 --SZN_window_size 5 --SZN_repeat_time 2 --n_epochs 1001 --Repr_max_step 75 --dual_slack 5e-3 --discrete 1
+
+
+# cont ? 
+# python tests/main.py --run_group RSD_exp --env minigrid --max_path_length 150 --seed 42 --traj_batch_size 128 --n_parallel 16 --n_epochs_per_eval 50 --n_epochs_per_save 25 --n_epochs_per_pt_save 25 --dim_option 4  --algo RSD --exp_name minigrid_500_discrete_PLEASE_CONT --phi_type Projection --explore_type SZN  --trans_optimization_epochs 100  --is_wandb 1  --SZN_w2 1 --SZN_w3 10 --SZN_window_size 5 --SZN_repeat_time 2 --n_epochs 1001 --Repr_max_step 150 --dual_slack 1.0 --discrete 0
+
+
+# almost good!!
+# python tests/main.py --run_group RSD_exp --env minigrid --max_path_length 150 --seed 42 --traj_batch_size 128 --n_parallel 16 --n_epochs_per_eval 50 --n_epochs_per_save 25 --n_epochs_per_pt_save 25 --dim_option 2  --algo RSD --exp_name minigrid_500_discrete_PLEASE_PLEASE2 --phi_type Projection --explore_type SZN  --trans_optimization_epochs 100  --is_wandb 1  --SZN_w2 1 --SZN_w3 10 --SZN_window_size 5 --SZN_repeat_time 2 --n_epochs 1001 --Repr_max_step 150 --dual_slack 1e-3 --dual_lam 1.0 --discrete 0
+
+# FIXED EXPERIMENT: Discrete 8 skills, fixed dual constraint, carrying state, no goal bias
+# python tests/main.py --run_group RSD_exp --env minigrid --max_path_length 100 --seed 42 --traj_batch_size 128 --n_parallel 16 --n_epochs_per_eval 50 --n_epochs_per_save 50 --n_epochs_per_pt_save 50 --dim_option 8 --algo RSD --exp_name minigrid_fixed_discrete_8 --phi_type Projection --explore_type SZN --trans_optimization_epochs 100 --is_wandb 1 --SZN_w2 3 --SZN_w3 1 --SZN_window_size 5 --SZN_repeat_time 2 --n_epochs 1001 --Repr_max_step 100 --dual_slack 0.05 --discrete 1
+
+python tests/main.py --run_group RSD_exp --env minigrid --max_path_length 150 --seed 42 --traj_batch_size 128 --n_parallel 16 --n_epochs_per_eval 50 --n_epochs_per_save 25 --n_epochs_per_pt_save 25 --dim_option 8  --algo RSD --exp_name mini_8d_1k_cont_obs_fixed --phi_type Projection --explore_type SZN  --trans_optimization_epochs 100  --is_wandb 1  --SZN_w2 3 --SZN_w3 1 --SZN_window_size 5 --SZN_repeat_time 2 --n_epochs 1001 --Repr_max_step 150 --dual_slack 5e-3 --dual_lam 1.0 --discrete 0

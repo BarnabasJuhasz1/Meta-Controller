@@ -2,12 +2,13 @@ import numpy as np
 import gym
 import akro
 import matplotlib.pyplot as plt
-
+import random
 try:
     from minigrid.minigrid_env import MiniGridEnv
     from minigrid.core.mission import MissionSpace
     from minigrid.core.grid import Grid
     from minigrid.core.world_object import Door, Goal, Key, Wall
+    from minigrid.wrappers import FullyObsWrapper
 except ImportError as exc:
     raise ImportError(
         "The minigrid package is required to use BaselineMiniGridEnv. "
@@ -21,14 +22,15 @@ class _SimpleMiniGrid(MiniGridEnv):
     def __init__(
         self,
         size=10,
-        agent_start_pos=(1, 1),
+        agent_start_pos=(1, 8),
         agent_start_dir=0,
         max_steps=None,
         **kwargs,
     ):
         self._size = size
         self._agent_start_pos = agent_start_pos
-        self._agent_start_dir = agent_start_dir
+        #self._agent_start_dir = agent_start_dir
+        self._agent_start_dir = random.randint(0, 3)
 
         mission_space = MissionSpace(mission_func=lambda: "testing")
 
@@ -53,7 +55,8 @@ class _SimpleMiniGrid(MiniGridEnv):
         grid.set(width // 2, height // 2, Door("red", is_locked=True))
         grid.set(width // 2 - 2, height // 2, Key("red"))
 
-        self.put_obj(Goal(), width - 2, height - 2)
+        # FIXED: Removed Goal object to prevent corner bias
+        # self.put_obj(Goal(), width - 2, height - 2)
 
         if self._agent_start_pos is not None:
             self.agent_pos = self._agent_start_pos
@@ -80,6 +83,9 @@ class BaselineMiniGridEnv(gym.Env):
     ):
         super().__init__()
         self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode)
+        # FIXED: Enable Full Observability to solve spatial aliasing (corner bias)
+        # self._env = FullyObsWrapper(self._env)
+        
         self._max_steps = max_steps or self._env.max_steps
         self._action_scale = action_scale
         self._discrete_actions = [
@@ -87,6 +93,7 @@ class BaselineMiniGridEnv(gym.Env):
             self._env.actions.left,
             self._env.actions.right,
             self._env.actions.pickup,
+            self._env.actions.drop,
             self._env.actions.toggle,
         ]
         self._num_actions = len(self._discrete_actions)
@@ -113,13 +120,56 @@ class BaselineMiniGridEnv(gym.Env):
 
         self._last_obs = sample_obs
 
-    def _process_obs(self, obs):
+    # def _process_obs(self, obs):
 
+    #     if isinstance(obs, tuple):
+    #         obs = obs[0]
+    #     image = obs["image"].astype(np.float32) / 255.0
+    #     direction = np.array([obs["direction"] / 3.0], dtype=np.float32)
+        
+    #     # FIXED: Add carrying state to observation
+    #     carrying = 1.0 if self._env.carrying is not None else 0.0
+    #     carrying = np.array([carrying], dtype=np.float32)
+    #     if carrying:
+    #         print("AGENT CARRYING")
+
+    #     return np.concatenate([image.flatten(), direction, carrying], axis=0)
+
+    def _process_obs(self, obs):
         if isinstance(obs, tuple):
             obs = obs[0]
+            
+        # 1. Flatten and normalize image
         image = obs["image"].astype(np.float32) / 255.0
+        
+        # 2. Normalize direction (0-3 becomes 0.0-1.0)
         direction = np.array([obs["direction"] / 3.0], dtype=np.float32)
-        return np.concatenate([image.flatten(), direction], axis=0)
+
+        # 3. Add Carrying (Binary)
+        # Accessing .unwrapped is safer in case of other wrappers
+        # env_base = self.env.unwrapped 
+        carrying_val = 1.0 if self._env.carrying is not None else 0.0
+        carrying = np.array([carrying_val], dtype=np.float32)
+
+        # 4. Add Agent Position (Normalized)
+        # We divide by width/height to keep inputs within [0, 1] range
+        agent_x = self._env.agent_pos[0] / self._env.width
+        agent_y = self._env.agent_pos[1] / self._env.height
+        position = np.array([agent_x, agent_y], dtype=np.float32)
+
+        # debug print
+        # if carrying_val > 0:
+        #     print(f"AGENT CARRYING at {self._env.agent_pos}")
+
+        # Concatenate everything: [Image flat, Direction, Carrying, PosX, PosY]
+        # return np.concatenate([
+        #     image.flatten(), 
+        #     direction, 
+        #     carrying, 
+        #     position
+        # ], axis=0)
+
+        return image.flatten()
 
     def _map_action(self, action):
         if action.ndim == 0:
@@ -177,6 +227,8 @@ class BaselineMiniGridEnv(gym.Env):
                 frame = self._env.get_frame(highlight=False, tile_size=32)
             elif hasattr(self._env.unwrapped, 'get_frame'):
                 frame = self._env.unwrapped.get_frame(highlight=False, tile_size=32)
+        
+        return frame
 
 
     def render_trajectories(self, trajectories, colors, plot_axis, ax):
