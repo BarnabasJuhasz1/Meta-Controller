@@ -52,6 +52,9 @@ visualizations/
 *.pt
 *.pkl
 
+# gifs
+*.gif
+
 # vim stuff
 *.swp
 
