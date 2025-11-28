@@ -46,6 +46,7 @@ train_results/
 jobs/
 visualizations/
 
+
 # vim stuff
 *.swp
 
@@ -54,3 +55,6 @@ visualizations/
 *.job
 
 *.pth
+
+scripts/metra/models
+scripts/metra/contOld
