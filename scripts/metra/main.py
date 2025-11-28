@@ -37,12 +37,12 @@ def main():
     
     nSkills = 8  
     
-    mM=ModelManager(phiNum=2,polNum=2)
+    mM=ModelManager(phiNum=3,polNum=3)
 
     metra = DiscreteSkillMetra(env, mM ,n_skills=nSkills,lmbd=30.0, device=device)
     
 
-    metra.train(num_epochs=100, steps_per_epoch=50, log_interval=100)
+    metra.train(num_epochs=5000, steps_per_epoch=20, log_interval=100)
     
     metra.save_models()
     
@@ -58,7 +58,7 @@ def main():
             render=True,                    
             max_steps=200,
             record_video=True,             
-            plot_trajectories=True,         
+            plot_trajectories=False,         
             plot_latent_space=True,         
             plot_unified_grid=True          
         )
