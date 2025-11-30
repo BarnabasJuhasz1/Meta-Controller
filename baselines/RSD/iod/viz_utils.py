@@ -5,7 +5,10 @@ import matplotlib.pyplot as plt
 import imageio
 
 from envs.AntMazeEnv import MazeWrapper, GoalReachingMaze, plot_trajectories, plot_value
-import d4rl
+try:
+    import d4rl
+except Exception:
+    pass
 import torch
 from sklearn.decomposition import PCA
 import matplotlib.cm as cm

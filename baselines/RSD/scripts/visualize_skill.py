@@ -74,7 +74,7 @@ def save_frames_as_gif(frames, path, fps=30):
     print(f"Saved GIF to {path}")
 
 
-def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='minigrid', save_gif=False, gif_dir='./gifs', fps=30):
+def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='minigrid', save_gif=False, gif_dir='./gifs', fps=30, repeat=1):
     option_policy_ckpt, _, _ = load_checkpoint(checkpoint_dir, epoch)
 
     discrete = option_policy_ckpt['discrete']
@@ -106,66 +106,10 @@ def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='min
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     option_policy = option_policy.to(device)
 
-    obs = env.reset()
-    
-    frames = []
-    if save_gif:
-        frame = env.render('rgb_array')
-        # Add step count to frame
-        if isinstance(frame, np.ndarray):
-            img = Image.fromarray(frame)
-            draw = ImageDraw.Draw(img)
-            # Use default font
-            try:
-                font = ImageFont.truetype("DejaVuSans-Bold.ttf", 15)
-            except IOError:
-                font = ImageFont.load_default()
-            
-            text = f"Step: 0"
-            # Draw text with black outline for visibility
-            x, y = 10, 10
-            draw.text((x-1, y), text, font=font, fill="black")
-            draw.text((x+1, y), text, font=font, fill="black")
-            draw.text((x, y-1), text, font=font, fill="black")
-            draw.text((x, y+1), text, font=font, fill="black")
-            draw.text((x, y), text, font=font, fill="white")
-            
-            frames.append(img)
-        else:
-            frames.append(frame)
-    elif hasattr(env, "render"):
-        env.render('human', title=f"Skill {skill_k}")
-        try:
-            import pygame
-            pygame.display.set_caption(f"Skill {skill_k}")
-        except Exception:
-            pass
-
-    if not save_gif:
-        print(f"Running skill {skill_k} forever. Window will not close.")
-    else:
-        print(f"Recording skill {skill_k} for one episode...")
-
-    step_count = 0
-
-    while True:  # infinite loop
-        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(device)
-        option_tensor = torch.from_numpy(option).float().unsqueeze(0).to(device)
-
-        if hasattr(option_policy, 'process_observations'):
-            processed_obs = option_policy.process_observations(obs_tensor)
-        else:
-            processed_obs = obs_tensor
-
-        concat_obs = torch.cat([processed_obs, option_tensor], dim=1)
-
-        with torch.no_grad():
-            dist, _ = option_policy(concat_obs)
-            action = dist.mean.cpu().numpy()[0]
-
-        obs, reward, done, info = env.step(action)
-        step_count += 1
-
+    for r in range(repeat):
+        obs = env.reset()
+        
+        frames = []
         if save_gif:
             frame = env.render('rgb_array')
             # Add step count to frame
@@ -178,7 +122,7 @@ def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='min
                 except IOError:
                     font = ImageFont.load_default()
                 
-                text = f"Step: {step_count}"
+                text = f"Step: 0"
                 # Draw text with black outline for visibility
                 x, y = 10, 10
                 draw.text((x-1, y), text, font=font, fill="black")
@@ -190,7 +134,7 @@ def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='min
                 frames.append(img)
             else:
                 frames.append(frame)
-        elif hasattr(env, 'render'):
+        elif hasattr(env, "render"):
             env.render('human', title=f"Skill {skill_k}")
             try:
                 import pygame
@@ -198,23 +142,81 @@ def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='min
             except Exception:
                 pass
 
-        if done or step_count >= max_steps:
+        if not save_gif:
+            print(f"Running skill {skill_k} forever. Window will not close.")
+        else:
+            print(f"Recording skill {skill_k} for episode {r+1}/{repeat}...")
+
+        step_count = 0
+
+        while True:  # infinite loop
+            obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(device)
+            option_tensor = torch.from_numpy(option).float().unsqueeze(0).to(device)
+
+            if hasattr(option_policy, 'process_observations'):
+                processed_obs = option_policy.process_observations(obs_tensor)
+            else:
+                processed_obs = obs_tensor
+
+            concat_obs = torch.cat([processed_obs, option_tensor], dim=1)
+
+            with torch.no_grad():
+                dist, _ = option_policy(concat_obs)
+                action = dist.mean.cpu().numpy()[0]
+
+            obs, reward, done, info = env.step(action)
+            step_count += 1
+
             if save_gif:
-                os.makedirs(gif_dir, exist_ok=True)
-                save_path = os.path.join(gif_dir, f"skill_{skill_k}_epoch_{epoch}.gif")
-                save_frames_as_gif(frames, save_path, fps=fps)
-                break
-            
-            obs = env.reset()
-            step_count = 0
+                frame = env.render('rgb_array')
+                # Add step count to frame
+                if isinstance(frame, np.ndarray):
+                    img = Image.fromarray(frame)
+                    draw = ImageDraw.Draw(img)
+                    # Use default font
+                    try:
+                        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 15)
+                    except IOError:
+                        font = ImageFont.load_default()
+                    
+                    text = f"Step: {step_count}"
+                    # Draw text with black outline for visibility
+                    x, y = 10, 10
+                    draw.text((x-1, y), text, font=font, fill="black")
+                    draw.text((x+1, y), text, font=font, fill="black")
+                    draw.text((x, y-1), text, font=font, fill="black")
+                    draw.text((x, y+1), text, font=font, fill="black")
+                    draw.text((x, y), text, font=font, fill="white")
+                    
+                    frames.append(img)
+                else:
+                    frames.append(frame)
+            elif hasattr(env, 'render'):
+                env.render('human', title=f"Skill {skill_k}")
+                try:
+                    import pygame
+                    pygame.display.set_caption(f"Skill {skill_k}")
+                except Exception:
+                    pass
+
+            if done or step_count >= max_steps:
+                if save_gif:
+                    os.makedirs(gif_dir, exist_ok=True)
+                    suffix = f"_rep{r}" if repeat > 1 else ""
+                    save_path = os.path.join(gif_dir, f"skill_{skill_k}_epoch_{epoch}{suffix}.gif")
+                    save_frames_as_gif(frames, save_path, fps=fps)
+                    break
+                
+                obs = env.reset()
+                step_count = 0
 
 
 
-def _run_skill_in_process(checkpoint_dir, epoch, skill_k, max_steps, env_name, save_gif, gif_dir, fps):
-    visualize_skill(checkpoint_dir, epoch, skill_k, max_steps, env_name, save_gif, gif_dir, fps)
+def _run_skill_in_process(checkpoint_dir, epoch, skill_k, max_steps, env_name, save_gif, gif_dir, fps, repeat):
+    visualize_skill(checkpoint_dir, epoch, skill_k, max_steps, env_name, save_gif, gif_dir, fps, repeat)
 
 
-def visualize_all_skills(checkpoint_dir, epoch, max_steps=100, env_name='minigrid', save_gif=False, gif_dir='./gifs', fps=30):
+def visualize_all_skills(checkpoint_dir, epoch, max_steps=100, env_name='minigrid', save_gif=False, gif_dir='./gifs', fps=30, repeat=1):
     option_policy_ckpt, _, _ = load_checkpoint(checkpoint_dir, epoch)
     discrete = option_policy_ckpt['discrete']
     dim_option = option_policy_ckpt['dim_option']
@@ -229,7 +231,7 @@ def visualize_all_skills(checkpoint_dir, epoch, max_steps=100, env_name='minigri
     procs = []
     for k in range(num_skills):
         p = mp.Process(target=_run_skill_in_process,
-                       args=(checkpoint_dir, epoch, k, max_steps, env_name, save_gif, gif_dir, fps))
+                       args=(checkpoint_dir, epoch, k, max_steps, env_name, save_gif, gif_dir, fps, repeat))
         p.start()
         procs.append(p)
 
@@ -245,18 +247,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint_dir', type=str, required=True)
     parser.add_argument('--epoch', type=int, required=True)
-    parser.add_argument('--skill', type=int, required=False)
+    parser.add_argument('--only_skill_index', type=int, required=False, help='Visualize only this specific skill index')
     parser.add_argument('--max_steps', type=int, default=100)
     parser.add_argument('--env', type=str, default='minigrid')
     parser.add_argument('--save_gif', action='store_true', help='Save skills as GIFs instead of rendering')
     parser.add_argument('--gif_dir', type=str, default='./gifs', help='Directory to save GIFs')
     parser.add_argument('--fps', type=int, default=30, help='Frames per second for the GIF')
+    parser.add_argument('--repeat', type=int, default=1, help='Number of times to repeat the visualization (re-initializing env)')
     args = parser.parse_args()
 
-    if args.skill is not None:
-        visualize_skill(args.checkpoint_dir, args.epoch, args.skill, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps)
+    if args.only_skill_index is not None:
+        visualize_skill(args.checkpoint_dir, args.epoch, args.only_skill_index, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps, args.repeat)
     else:
-        visualize_all_skills(args.checkpoint_dir, args.epoch, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps)
+        visualize_all_skills(args.checkpoint_dir, args.epoch, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps, args.repeat)
 
 
 if __name__ == '__main__':

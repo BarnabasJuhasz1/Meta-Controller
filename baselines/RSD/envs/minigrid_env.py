@@ -9,6 +9,7 @@ try:
     from minigrid.core.grid import Grid
     from minigrid.core.world_object import Door, Goal, Key, Wall
     from minigrid.wrappers import FullyObsWrapper
+    from minigrid.envs import DoorKeyEnv
 except ImportError as exc:
     raise ImportError(
         "The minigrid package is required to use BaselineMiniGridEnv. "
@@ -22,16 +23,20 @@ class _SimpleMiniGrid(MiniGridEnv):
     def __init__(
         self,
         size=10,
-        agent_start_pos=(1, 8),
+        agent_start_pos=(1, 1),
         agent_start_dir=0,
+        key_pos=None,
         max_steps=None,
         **kwargs,
     ):
         self._size = size
         self._agent_start_pos = agent_start_pos
-        #self._agent_start_dir = agent_start_dir
-        self._agent_start_dir = random.randint(0, 3)
-
+        # agent_start_pos=None,
+        self._agent_start_dir = agent_start_dir
+        # self._agent_start_dir = random.randint(0, 3)
+        self._key_pos = key_pos
+        self.rng = random.Random() # Use dedicated RNG for key placement
+        
         mission_space = MissionSpace(mission_func=lambda: "testing")
 
         if max_steps is None:
@@ -53,18 +58,35 @@ class _SimpleMiniGrid(MiniGridEnv):
             grid.set(width // 2, i, Wall())
 
         grid.set(width // 2, height // 2, Door("red", is_locked=True))
-        grid.set(width // 2 - 2, height // 2, Key("red"))
+        if self._key_pos == 'random':
+            # Randomly place key in the left room
+            # Left room x range: 1 to width // 2 - 1
+            # y range: 1 to height - 2
+            # Avoid agent start position if it's fixed
+            while True:
+                key_x = self.rng.randint(1, width // 2 - 1)
+                key_y = self.rng.randint(1, height - 2)
+                if self._agent_start_pos is not None:
+                    if (key_x, key_y) == self._agent_start_pos:
+                        continue
+                grid.set(key_x, key_y, Key("red"))
+                # print(f"Key placed at ({key_x}, {key_y})")
+                break
+        elif self._key_pos is not None:
+            grid.set(self._key_pos[0], self._key_pos[1], Key("red"))
+        else:
+            grid.set(width // 2 - 2, height // 2, Key("red"))
 
         # FIXED: Removed Goal object to prevent corner bias
         # self.put_obj(Goal(), width - 2, height - 2)
 
+        self.grid = grid
         if self._agent_start_pos is not None:
             self.agent_pos = self._agent_start_pos
             self.agent_dir = self._agent_start_dir
         else:
             self.place_agent()
 
-        self.grid = grid
         self.mission = "testing"
 
 
@@ -82,7 +104,15 @@ class BaselineMiniGridEnv(gym.Env):
         env_name="minigrid",
     ):
         super().__init__()
-        self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode)
+        if env_name == "minigrid":
+            self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode)
+        elif env_name == "minigrid_random_key":
+            self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode, key_pos='random')
+        elif env_name == "minigrid_small":
+            # DoorKeyEnv-5x5 (there is also size 6, 8, and 16)
+            self._env = DoorKeyEnv(size=8, max_steps=max_steps, render_mode=render_mode)
+        else:
+            raise ValueError(f"Unknown environment name: {env_name}")
         # FIXED: Enable Full Observability to solve spatial aliasing (corner bias)
         # self._env = FullyObsWrapper(self._env)
         
@@ -161,6 +191,8 @@ class BaselineMiniGridEnv(gym.Env):
         # if carrying_val > 0:
         #     print(f"AGENT CARRYING at {self._env.agent_pos}")
 
+        #return image.flatten()
+        
         # Concatenate everything: [Image flat, Direction, Carrying, PosX, PosY]
         # return np.concatenate([
         #     image.flatten(), 
@@ -168,8 +200,12 @@ class BaselineMiniGridEnv(gym.Env):
         #     carrying, 
         #     position
         # ], axis=0)
-
-        return image.flatten()
+        return np.concatenate([
+            image.flatten(), 
+            direction, 
+            carrying, 
+            # position
+        ], axis=0)
 
     def _map_action(self, action):
         if action.ndim == 0:

@@ -13,14 +13,14 @@ from iod.utils import get_torch_concat_obs, FigManager, get_option_colors, recor
 import wandb
 from iod.agent import AgentWrapper
 
-from iod.viz_utils import PlotMazeTraj
-
 import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import trange, tqdm
 from iod.GradCLipper import GradClipper
 import matplotlib.pyplot as plt
 import torch.distributions as dist
+
+from iod.viz_utils import PlotMazeTraj
 from iod.viz_utils import PlotMazeTrajDist, PlotMazeTrajWindowDist, viz_dist_circle, PlotGMM
 from functools import partial
 
@@ -803,18 +803,22 @@ class RSD(IOD):
                 # is too restrictive. We keep it for stability but make it very loose.
                 # REVERTED: The original code implements a Lipschitz constraint (Upper Bound).
                 # Flipping it created a Lower Bound (forcing movement) which destabilized training.
-                cst_penalty_1 = 1 / self.max_path_length - self.norm(v['psi_s'] - v['psi_s_next'])
+                # Relaxed constraint to allow traversing the latent space (range ~2)
+                # 8.0 / L allows for an average step size sufficient to cross the space.
+                cst_penalty_1 = 8.0 / self.max_path_length - self.norm(v['psi_s'] - v['psi_s_next'])
                 
-                cst_penalty_2 = -self.norm(v['psi_s_0'])
+                # REMOVED: cst_penalty_2 = -self.norm(v['psi_s_0'])
+                # This term forced the start state representation to be 0, causing collapse.
+                
                 # Use a looser clamp to allow spatial spread
-                cst_penalty = torch.clamp(cst_penalty_1, max=self.dual_slack)
+                cst_penalty = torch.clamp(cst_penalty_1, max=0.0)
                 
-                te_obj = rewards + dual_lam.detach() * cst_penalty + cst_penalty_2
+                te_obj = rewards + dual_lam.detach() * cst_penalty # + cst_penalty_2
                 v.update({
                     'cst_penalty': cst_penalty
                 })
                 tensors.update({
-                    'cst_penalty_2': cst_penalty_2.mean(),
+                    # 'cst_penalty_2': cst_penalty_2.mean(),
                     'cst_penalty_1': cst_penalty_1.mean(),
                 })
             
@@ -974,7 +978,7 @@ class RSD(IOD):
     '''
     @torch.no_grad()
     def _evaluate_policy(self, runner, env_name):
-        if env_name in ['lm', 'ant_maze', 'ant_maze_large', 'minigrid']:
+        if env_name in ['lm', 'ant_maze', 'ant_maze_large', 'minigrid'] or 'minigrid' in env_name:
             if wandb.run is not None:
                 path = wandb.run.dir + '/E' + str(runner.step_itr) + '-'
             else:

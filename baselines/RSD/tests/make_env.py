@@ -52,9 +52,9 @@ def make_env(args, max_path_length, render_mode=None):
         from envs.AntMazeEnv import MazeWrapper, GoalReachingMaze
         env = MazeWrapper("maze2d-large-v1", random_init=False)
 
-    elif args.env == 'minigrid':
+    elif 'minigrid' in args.env:
         from envs.minigrid_env import BaselineMiniGridEnv
-        env = BaselineMiniGridEnv(max_steps=max_path_length, render_mode=render_mode)
+        env = BaselineMiniGridEnv(env_name = args.env, max_steps=max_path_length, render_mode=render_mode)
     
     else:
         raise NotImplementedError

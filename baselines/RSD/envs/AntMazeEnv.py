@@ -1,4 +1,7 @@
-import d4rl
+try:
+    import d4rl
+except Exception:
+    pass
 import gym
 import numpy as np
 import functools as ft

@@ -2,7 +2,7 @@
 try:
     import mujoco_py  # noqa: F401
 except Exception as e:
-    raise e
+    pass
 
 from garage.envs.mujoco.half_cheetah_dir_env import HalfCheetahDirEnv
 from garage.envs.mujoco.half_cheetah_vel_env import HalfCheetahVelEnv

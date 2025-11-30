@@ -23,7 +23,7 @@ import os
 # from iod.ant_eval import *
 from iod.viz_utils import *
 from iod.agent import *
-from iod.viz_utils import PlotMazeTrajDist, PlotMazeTrajWindowDist, viz_dist_circle, PlotGMM, plot_trajectories_local
+# from iod.viz_utils import PlotMazeTrajDist, PlotMazeTrajWindowDist, viz_dist_circle, PlotGMM, plot_trajectories_local
 
 
 class IOD(RLAlgorithm):
