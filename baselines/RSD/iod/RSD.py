@@ -805,20 +805,33 @@ class RSD(IOD):
                 # Flipping it created a Lower Bound (forcing movement) which destabilized training.
                 # Relaxed constraint to allow traversing the latent space (range ~2)
                 # 8.0 / L allows for an average step size sufficient to cross the space.
-                cst_penalty_1 = 8.0 / self.max_path_length - self.norm(v['psi_s'] - v['psi_s_next'])
                 
-                # REMOVED: cst_penalty_2 = -self.norm(v['psi_s_0'])
+                # original
+                cst_penalty_1 = 1.0 / self.max_path_length - self.norm(v['psi_s'] - v['psi_s_next'])
+                # new
+                # cst_penalty_1 = 8.0 / self.max_path_length - self.norm(v['psi_s'] - v['psi_s_next'])
+                
+                # original
+                cst_penalty_2 = -self.norm(v['psi_s_0'])
+                # new -> removed
+
                 # This term forced the start state representation to be 0, causing collapse.
                 
                 # Use a looser clamp to allow spatial spread
                 cst_penalty = torch.clamp(cst_penalty_1, max=0.0)
                 
-                te_obj = rewards + dual_lam.detach() * cst_penalty # + cst_penalty_2
+                # original
+                te_obj = rewards + dual_lam.detach() * cst_penalty + cst_penalty_2
+                # new
+                # te_obj = rewards + dual_lam.detach() * cst_penalty # + cst_penalty_2
+
                 v.update({
                     'cst_penalty': cst_penalty
                 })
                 tensors.update({
-                    # 'cst_penalty_2': cst_penalty_2.mean(),
+                    # original
+                    'cst_penalty_2': cst_penalty_2.mean(),
+                    # new -> removed
                     'cst_penalty_1': cst_penalty_1.mean(),
                 })
             

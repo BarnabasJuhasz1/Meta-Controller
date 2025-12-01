@@ -246,7 +246,7 @@ def visualize_all_skills(checkpoint_dir, epoch, max_steps=100, env_name='minigri
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint_dir', type=str, required=True)
-    parser.add_argument('--epoch', type=int, required=True)
+    parser.add_argument('--epoch', type=int, nargs='+', required=True)
     parser.add_argument('--only_skill_index', type=int, required=False, help='Visualize only this specific skill index')
     parser.add_argument('--max_steps', type=int, default=100)
     parser.add_argument('--env', type=str, default='minigrid')
@@ -256,10 +256,11 @@ def main():
     parser.add_argument('--repeat', type=int, default=1, help='Number of times to repeat the visualization (re-initializing env)')
     args = parser.parse_args()
 
-    if args.only_skill_index is not None:
-        visualize_skill(args.checkpoint_dir, args.epoch, args.only_skill_index, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps, args.repeat)
-    else:
-        visualize_all_skills(args.checkpoint_dir, args.epoch, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps, args.repeat)
+    for epoch in args.epoch:
+        if args.only_skill_index is not None:
+            visualize_skill(args.checkpoint_dir, epoch, args.only_skill_index, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps, args.repeat)
+        else:
+            visualize_all_skills(args.checkpoint_dir, epoch, args.max_steps, args.env, args.save_gif, args.gif_dir, args.fps, args.repeat)
 
 
 if __name__ == '__main__':
