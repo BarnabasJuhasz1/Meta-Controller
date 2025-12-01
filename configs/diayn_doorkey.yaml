@@ -1,0 +1,66 @@
+# ================================
+# DIAYN for MiniGrid-DoorKey-8x8
+# Stable, tuned configuration
+# ================================
+
+# -------- Environment --------
+env_id: "MiniGrid-DoorKey-8x8-v0"
+obs_type: "rgb"            # RGB observations recommended for DIAYN
+
+# -------- Agent Configuration --------
+agent:
+
+  # auto-filled at runtime, but define defaults:
+  obs_shape: [7, 7, 3]
+  action_dim: 7
+
+  # Skill configuration
+  skill_dim: 8              # Number of skills to learn
+
+  # Network architecture
+  hidden_dim: 512
+
+  # Learning
+  lr: 3e-4                  # Higher LR is better for DoorKey
+  gamma: 0.99
+  entropy_coef: 0.01
+
+  # Replay Buffer
+  batch_size: 256
+  replay_size: 50000        # Bigger buffer helps exploration
+
+  # Intrinsic reward scaling
+  intrinsic_reward_scale: 1.0     # DoorKey needs strong intrinsic motivation
+
+  # Device (auto picks GPU if available)
+  device: "auto"
+
+# -------- Training Configuration --------
+training:
+
+  max_episodes: 30000              # DoorKey requires more training
+  max_steps_per_episode: 200       # DoorKey exploration requires long horizon
+
+  # Logging / Evaluation
+  log_interval: 500
+  eval_interval: 1000
+  eval_episodes: 5
+
+  # Checkpointing
+  save_interval: 1000
+
+  # Parallel environments (helps DIAYN a LOT)
+  env_parallel: 8
+
+# -------- Logging --------
+logging:
+  log_dir: "logs"
+  project_name: "diayn-doorkey-8x8"
+  use_tensorboard: true
+
+  save_video: true
+  video_interval: 2000
+
+# Notes:
+# - DoorKey is much harder than Empty. Skills will initially explore randomly.
+# - A long horizon (200 steps) is required for skills to spread across rooms.
