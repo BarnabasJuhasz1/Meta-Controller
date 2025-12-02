@@ -1,7 +1,8 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-import gym
+import gymnasium as gym
+from gymnasium import spaces
 import akro
 import matplotlib.pyplot as plt
 import random
@@ -16,15 +17,17 @@ from minigrid.envs import DoorKeyEnv
 class MetaControllerEnv(gym.Env):
     def __init__(
         self,
-        skill_registry,        
-        env_name="minigrid_small",
+        skill_registry,
+        model_interfaces,       
+        env_name="minigrid",
         skill_duration=10,
         max_steps=None,
         action_scale=1.0,
         render_mode="rgb_array",
+        
     ):
         super().__init__()
-        if env_name == "minigrid_small":
+        if env_name == "minigrid":
             # DoorKeyEnv-5x5 (there is also size 6, 8, and 16)
             self._env = DoorKeyEnv(size=8, max_steps=max_steps, render_mode=render_mode)
         else:
@@ -33,6 +36,7 @@ class MetaControllerEnv(gym.Env):
         self.skill_duration = skill_duration # "How long selected skill should run" 
         self._max_steps = max_steps or self._env.max_steps
         self._action_scale = action_scale
+        self.model_interfaces = model_interfaces
 
         # Action Space: Select one of the frozen skills
         # self.action_space = spaces.Discrete(self.registry.num_actions)
@@ -45,7 +49,7 @@ class MetaControllerEnv(gym.Env):
             self._env.actions.toggle,
         ]
         self._num_actions = len(self._discrete_actions)
-        self.action_space = akro.Box(
+        self.action_space = spaces.Box(
             low=-action_scale,
             high=action_scale,
             shape=(self._num_actions,),
@@ -60,7 +64,7 @@ class MetaControllerEnv(gym.Env):
         else:
             initial_obs = reset_result
         sample_obs = self._process_obs(initial_obs)
-        self.observation_space = akro.Box(
+        self.observation_space = spaces.Box(
             low=0.0,
             high=1.0,
             shape=sample_obs.shape,
@@ -78,7 +82,8 @@ class MetaControllerEnv(gym.Env):
         else:
             obs = result
         self._last_obs = self._process_obs(obs)
-        return self._last_obs
+        info = {}
+        return self._last_obs, info
 
     def _map_action(self, action):
         if action.ndim == 0:
@@ -128,9 +133,11 @@ class MetaControllerEnv(gym.Env):
         terminated = False
         truncated = False
 
+        print("STEP CALLED WITH SKILL INDEX: {}".format(global_skill_idx))
+
         # 1. DECODE: Retrieve the specific model and z vector
         # This handles the "Selection of skill & model" automatically
-        policy_net, z_vector = self.registry.get_skill(global_skill_idx)
+        algo_name, z_vector = self.registry.get_algo_and_skill_from_skill_idx(global_skill_idx)
 
         # --- The Scheduler Loop  ---
         for _ in range(self.skill_duration):
@@ -142,11 +149,8 @@ class MetaControllerEnv(gym.Env):
             # 2. Ask the specific sub-skill for a primitive action
             # We use the current observation (self.last_obs) 
             # primitive_action = self.registry.get_action(action, self.last_obs)
-
-            # Get primitive action from the selected model
-            # Note: Ensure your policy_net can handle the observation format
             with torch.no_grad():
-                primitive_action = policy_net.get_action(current_obs, z_vector)
+                primitive_action = self.model_interfaces[algo_name].get_action(current_obs, z_vector)
             
             # 3. Step the physical environment
             obs, reward, terminated, truncated, info = self._env.step(primitive_action)

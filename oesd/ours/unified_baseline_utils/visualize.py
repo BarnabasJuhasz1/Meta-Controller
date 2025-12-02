@@ -7,7 +7,7 @@ import sys
 import numpy as np
 import gymnasium as gym
 
-from SingleLoader import load_model_from_config, ModelConfig
+from SingleLoader import load_model_from_config, load_config
 from SingleVisualizer import SingleVisualizer, VisualizerConfig, EnvConfig
 
 
@@ -178,17 +178,6 @@ parser.add_argument("--skill_idx", type=int, default=0)
 parser.add_argument("--config", type=str, default="configs/config1.py")
 parser.add_argument("--skill_count", type=int, default=8)
 
-def load_config(config_path: str):
-    module_name = os.path.basename(config_path).replace('.py', '')
-    spec = importlib.util.spec_from_file_location(module_name, config_path)
-
-    # 3. Create the module object
-    config_module = importlib.util.module_from_spec(spec)
-
-    # 4. Execute the module to populate it
-    spec.loader.exec_module(config_module)
-
-    return config_module
 
 def main(_A: argparse.Namespace):
 

@@ -139,8 +139,10 @@ class RSDAdapter(BaseAdapter):
 
         with torch.no_grad():
             if hasattr(self.option_policy, 'process_observations'):
+                print("observations ARE processed inside get_action")
                 processed_obs = self.option_policy.process_observations(obs_tensor)
             else:
+                print("observations are NOT processed inside get_action")
                 processed_obs = obs_tensor
 
             concat_obs = torch.cat([processed_obs, skill_tensor], dim=1)

@@ -5,10 +5,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
+import os
+import importlib
 
-from adapters.BaseAdapter import BaseAdapter
-from adapters.LSD_adapter import LSDAdapter
-from adapters.RSD_adapter import RSDAdapter
+from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
+from oesd.ours.unified_baseline_utils.adapters.LSD_adapter import LSDAdapter
+from oesd.ours.unified_baseline_utils.adapters.RSD_adapter import RSDAdapter
 
 # ============================================================================
 # ModelConfig dataclass
@@ -60,3 +62,16 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
     # ------------------------------------------------------------
 
     raise ValueError(f"Unknown algorithm: {cfg.algo_name}")
+
+
+def load_config(config_path: str):
+    module_name = os.path.basename(config_path).replace('.py', '')
+    spec = importlib.util.spec_from_file_location(module_name, config_path)
+
+    # 3. Create the module object
+    config_module = importlib.util.module_from_spec(spec)
+
+    # 4. Execute the module to populate it
+    spec.loader.exec_module(config_module)
+
+    return config_module
