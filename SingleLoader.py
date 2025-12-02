@@ -45,7 +45,6 @@ class LSDAdapter(BaseAdapter):
     """
 
     def __init__(self, ckpt_path: str, action_dim: int, save_dir: str):
-        # Import here to avoid circular deps
         from algorithms.lsd import LSDTrainer, LSDConfig
 
         # Load trainer + model weights
@@ -110,7 +109,7 @@ def load_model_from_config(cfg: ModelConfig) -> BaseAdapter:
         return adapter
 
     # ------------------------------------------------------------
-    # ADD FUTURE ALGORITHMS HERE (DIAYN, DADS, CIC, etc.)
+    # ADD FUTURE ALGORITHMS HERE
     # ------------------------------------------------------------
 
     raise ValueError(f"Unknown algorithm: {cfg.algo}")
