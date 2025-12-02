@@ -76,14 +76,14 @@ class SingleEnvWrapper(gym.Wrapper):
 
     def step_with_model(
         self,
-        skill_vector,
+        skill_z,
         deterministic: bool = False
     ):
         """
         Compute action via the adapter, then step environment:
 
             obs_vec = adapter.preprocess_observation(_last_obs)
-            action  = adapter.get_action(model, obs_vec, skill_vector)
+            action  = adapter.get_action(model, obs_vec, skill_z)
             obs, reward, ter, trunc, info = env.step(action)
 
         Returns:
@@ -95,13 +95,14 @@ class SingleEnvWrapper(gym.Wrapper):
             )
 
         # 1. Convert raw MiniGrid obs → model input vector
-        obs_vec = self.adapter.preprocess_observation(self._last_obs)
+        # obs_vec = self.adapter.preprocess_observation(self._last_obs)
 
         # 2. Query the algorithm for primitive action
         action = self.adapter.get_action(
             self.model,
-            obs_vec,
-            skill_vector,
+            # obs_vec,
+            self._last_obs,
+            skill_z,
             deterministic=deterministic,
         )
 
@@ -109,6 +110,5 @@ class SingleEnvWrapper(gym.Wrapper):
         obs, reward, terminated, truncated, info = self.step(action)
 
         setattr(self.env, "_last_action", int(action))
-
 
         return obs, reward, terminated, truncated, info, action

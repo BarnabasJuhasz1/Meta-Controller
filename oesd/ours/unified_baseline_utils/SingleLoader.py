@@ -6,6 +6,7 @@ from typing import Any
 
 import torch
 
+from adapters.BaseAdapter import BaseAdapter
 from adapters.LSD_adapter import LSDAdapter
 from adapters.RSD_adapter import RSDAdapter
 
@@ -23,28 +24,10 @@ class ModelConfig:
 
 
 # ============================================================================
-# Base class for all adapters
-# ============================================================================
-
-class BaseAdapter:
-    """
-    Every adapter must implement:
-        - get_action(obs, deterministic)
-    """
-    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str):
-        self.ckpt_path = ckpt_path
-        self.action_dim = action_dim
-        self.save_dir = save_dir
-        print(f"Loading {algo_name} checkpoints from {ckpt_path}. Action dim: {action_dim}")
-
-    def get_action(self, obs, skill_z, deterministic=False):
-        raise NotImplementedError
-
-# ============================================================================
 # Loader function
 # ============================================================================
 
-def load_model_from_config(cfg: ModelConfig) -> BaseAdapter:
+def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = None) -> BaseAdapter:
     """
     ALWAYS return a SINGLE adapter object.
     NEVER return tuples.
@@ -52,20 +35,22 @@ def load_model_from_config(cfg: ModelConfig) -> BaseAdapter:
 
     algo_name = cfg.algo_name.lower()
 
-    if algo_name == "lsd":
+    if "lsd" in algo_name:
         adapter = LSDAdapter(
             algo_name=algo_name,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
-            save_dir=cfg.adapter_kwargs.get("save_dir", "./")
+            save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
+            skill_registry=skill_registry
         )
         return adapter
-    elif algo_name == "RSD":
+    elif "rsd" in algo_name:
         adapter = RSDAdapter(
             algo_name=algo_name,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
-            save_dir=cfg.adapter_kwargs.get("save_dir", "./")
+            save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
+            skill_registry=skill_registry
         )
         return adapter
 
@@ -74,4 +59,4 @@ def load_model_from_config(cfg: ModelConfig) -> BaseAdapter:
     # ADD FUTURE ALGORITHMS HERE
     # ------------------------------------------------------------
 
-    raise ValueError(f"Unknown algorithm: {cfg.algo}")
+    raise ValueError(f"Unknown algorithm: {cfg.algo_name}")

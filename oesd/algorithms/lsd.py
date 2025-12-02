@@ -50,7 +50,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from collections import deque
 
 # MiniGrid environment
-import scripts.testing.example_minigrid as example_minigrid
+import oesd.testing_playground.testing.example_minigrid as example_minigrid
 
 
 # ======================================================================================

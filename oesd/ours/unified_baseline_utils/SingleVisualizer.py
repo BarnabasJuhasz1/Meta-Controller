@@ -7,6 +7,10 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Any
 
+from SingleLoader import load_model_from_config
+
+from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
+
 
 # ============================================================================
 # Dataclasses for configs
@@ -26,6 +30,7 @@ class VisualizerConfig:
     deterministic: bool
     seed: int
     position_fn: Callable      # unified_position_fn
+    skill_count: int
 
 
 # ============================================================================
@@ -49,10 +54,13 @@ class SingleVisualizer:
         self.deterministic = cfg.deterministic
         self.seed = cfg.seed
         self.position_fn = cfg.position_fn
+        self.skill_count = cfg.skill_count
 
-        # loader is imported here to avoid circular imports
-        from SingleLoader import load_model_from_config
-        self.model_interfaces = [load_model_from_config(m) for m in self.models]
+        # INITIALIZE SKILL REGISTRY
+        self.skill_registry = SkillRegistry(self.skill_count)
+    
+        # LOAD MODELS VIA ADAPTERS (while feeding skill_registry to adapters)
+        self.model_interfaces = [load_model_from_config(m, skill_registry=self.skill_registry) for m in self.models]
 
     # ----------------------------------------------------------------------
     # Helper to run one episode for one model

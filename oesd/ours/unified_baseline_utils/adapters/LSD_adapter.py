@@ -5,7 +5,8 @@ from typing import Any
 
 import torch
 import numpy as np
-
+from oesd.algorithms.lsd import LSDTrainer, LSDConfig
+from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 # ============================================================================
 # LSD Adapter
 # ============================================================================
@@ -16,10 +17,8 @@ class LSDAdapter(BaseAdapter):
     Provides a uniform get_action() interface.
     """
 
-    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str):
+    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
         super().__init__(algo_name, ckpt_path, action_dim, save_dir)
-
-        from algorithms.lsd import LSDTrainer, LSDConfig
 
         # Load trainer + model weights
         cfg = LSDConfig()
