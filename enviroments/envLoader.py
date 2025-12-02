@@ -15,9 +15,7 @@ from minigrid_wrapper import MiniGridWrapper
 
 # other envs
 
-from AntMazeEnv import MazeWrapper
 
-from maze_env import MazeEnv
 
 
 class envLoader:
