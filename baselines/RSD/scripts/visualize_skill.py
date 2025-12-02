@@ -50,10 +50,19 @@ def get_option_vector(k, dim_option, discrete, unit_length=False):
         r = 1.0 if unit_length else 1.5
         return np.array([r * np.cos(angle), r * np.sin(angle)])
 
-    np.random.seed(k)
-    v = np.random.randn(dim_option)
+    # Use basis vectors for diversity in higher dimensions
+    if k < dim_option:
+        v = np.zeros(dim_option)
+        v[k] = 1.0
+    elif k < 2 * dim_option:
+        v = np.zeros(dim_option)
+        v[k - dim_option] = 1.0
+    else:
+        np.random.seed(k)
+        v = np.random.randn(dim_option)
+
     if unit_length:
-        v = v / np.linalg.norm(v)
+        v = v / (np.linalg.norm(v) + 1e-8)
     return v
 
 
