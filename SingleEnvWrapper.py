@@ -108,4 +108,7 @@ class SingleEnvWrapper(gym.Wrapper):
         # 3. Execute in environment
         obs, reward, terminated, truncated, info = self.step(action)
 
+        setattr(self.env, "_last_action", int(action))
+
+
         return obs, reward, terminated, truncated, info, action

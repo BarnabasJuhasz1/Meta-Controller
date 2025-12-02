@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 import numpy as np
 import gymnasium as gym
 
 from SingleLoader import load_model_from_config, ModelConfig
 from SingleVisualizer import SingleVisualizer, VisualizerConfig, EnvConfig
-from adapters.registry import ADAPTER_REGISTRY
+
+# Only LSD is wired for training
+from algorithms.lsd import LSDTrainer, LSDConfig
 
 
 # ============================================================================
-# Utility helpers
+# Helper Functions
 # ============================================================================
 
 def ask(prompt: str, default=None, cast=str):
-    """Simple console input with optional default + casting."""
     if default is not None:
         prompt = f"{prompt} [{default}]: "
     ans = input(prompt).strip()
@@ -26,163 +26,226 @@ def ask(prompt: str, default=None, cast=str):
         return cast(default)
     return cast(ans)
 
-
-def ensure_dir(path: str | Path):
-    path = Path(path)
-    path.mkdir(parents=True, exist_ok=True)
+def ensure_dir(path: str):
+    os.makedirs(path, exist_ok=True)
     return path
 
 
 # ============================================================================
-# ENV FACTORY (generic MiniGrid or any gym env) / wait on Dionigi
+# Environment Selection Logic (SimpleEnv + Any Future Env)
 # ============================================================================
 
-def make_env_factory(env_id: str, **env_kwargs):
-    def factory():
-        return gym.make(env_id, **env_kwargs)
-    return factory
-
-
-# ============================================================================
-# TRAINING DISPATCH (each algorithm handles its own training mode)
-# ============================================================================
-
-def train_model(algo: str):
+def build_env_factory(env_id: str):
     """
-    Training logic is algorithm-specific.
-
-    For LSD: lsd.py already contains a full training entry via LSDTrainer.
-    For DIAYN, CIC, etc., you will plug their training logic here.
-
-    This function simply dispatches to the algorithm-specific training script.
+    Returns a factory() -> env function that works for:
+        - "simple" (your SimpleEnv)
+        - any future custom env names
+        - any gym/gymnasium environment IDs
     """
-    algo = algo.lower()
 
-    if algo == "lsd":
-        print("\nLaunching LSD training script...")
-        os.system("python lsd.py train")
-        return
+    env_id = env_id.lower()
 
-    # TODO: Add training dispatch for DIAYN, CIC, METRA etc.
-    print(f"\nERROR: Training not implemented yet for '{algo}'.")
-    sys.exit(1)
+    # SIMPLE ENV SPECIAL CASE
+    if env_id == "simple":
+        from scripts.testing.example_minigrid import SimpleEnv
+
+        def factory():
+            return SimpleEnv(size=8, max_steps=200, render_mode="rgb_array")
+
+        # we return a fake env to inspect action_dim
+        tmp_env = factory()
+        return factory, tmp_env
+
+    # OTHERWISE → treat as gym environment ID
+    else:
+        def factory():
+            return gym.make(env_id)
+
+        tmp_env = gym.make(env_id)
+        return factory, tmp_env
+
 
 
 # ============================================================================
-# MAIN
+# Training API (Only LSD)
+# ============================================================================
+
+def train_lsd():
+    print("\n=== LSD TRAINING ===")
+
+    cfg = LSDConfig()
+    episodes = ask("Number of episodes", default=str(cfg.num_episodes), cast=int)
+    cfg.num_episodes = episodes
+
+    trainer = LSDTrainer(cfg)
+    trainer.train()
+
+    save_dir = ensure_dir("checkpoints/lsd")
+    trainer.save(save_dir)
+    print("\nTraining complete.\n")
+
+
+
+# ============================================================================
+# Position Extraction (SimpleEnv + Any Future Env)
+# ============================================================================
+
+def unified_position_fn(env, obs, info):
+    """
+    Universal position extractor:
+    - If env exposes agent_pos → use it
+    - Else if tracking is present → use it
+    - Else → return (0,0)
+    """
+
+    # Case 1 — environments with actual agent_pos (MiniGrid)
+    if hasattr(env, "agent_pos"):
+        try:
+            pos = np.array(env.agent_pos, dtype=np.float32)
+            if pos.shape == (2,):
+                return pos
+        except:
+            pass
+
+    # Case 2 — relative tracker for SimpleEnv or others
+    if hasattr(env, "_vis_x") and hasattr(env, "_vis_y"):
+        return np.array([env._vis_x, env._vis_y], dtype=np.float32)
+
+    # Case 3 — fallback
+    return np.zeros(2, dtype=np.float32)
+
+
+
+# ============================================================================
+# Position Update Logic (called each step)
+# This integrates relative motion for envs that do NOT expose agent_pos
+# ============================================================================
+
+def update_relative_motion(env):
+    """
+    Fill in motion tracking for SimpleEnv or custom envs
+    using last action + agent_dir.
+    """
+
+    # Initialize state
+    if not hasattr(env, "_vis_initialized"):
+        env._vis_x = 0.0
+        env._vis_y = 0.0
+        env._vis_initialized = True
+
+    # Use MiniGrid-style orientation if present
+    agent_dir = getattr(env, "agent_dir", 0)
+    last_action = getattr(env, "_last_action", None)
+
+    # MiniGrid: action 2 = forward
+    if last_action == 2:
+        if agent_dir == 0:      # right
+            env._vis_x += 1
+        elif agent_dir == 1:    # down
+            env._vis_y += 1
+        elif agent_dir == 2:    # left
+            env._vis_x -= 1
+        elif agent_dir == 3:    # up
+            env._vis_y -= 1
+
+
+
+# ============================================================================
+# MAIN PROGRAM
 # ============================================================================
 
 def main():
     print("\n=== Unified RL Interface ===\n")
 
     # ----------------------------------------------------------------------
-    # 1) Mode selection
+    # Choose mode
     # ----------------------------------------------------------------------
-    mode = ask("Select mode: train / visualize", default="visualize").lower()
-    if mode not in {"train", "visualize"}:
-        print("Unknown mode. Must be 'train' or 'visualize'.")
-        sys.exit(1)
+    mode = ask("Select mode: train / visualize", default="visualize")
 
-    # ----------------------------------------------------------------------
-    # MODE: TRAINING
-    # ----------------------------------------------------------------------
     if mode == "train":
-        print("\nAvailable algos:", ", ".join(ADAPTER_REGISTRY.keys()))
         algo = ask("Which algorithm to train?", default="lsd")
-
-        train_model(algo)
+        if algo != "lsd":
+            print("Only LSD training implemented.")
+            return
+        train_lsd()
         return
 
+
     # ----------------------------------------------------------------------
-    # MODE: VISUALIZATION
+    # VISUALIZATION MODE
     # ----------------------------------------------------------------------
     print("\n=== Visualization Mode ===")
-    print("Available algos:", ", ".join(ADAPTER_REGISTRY.keys()))
 
-    num_models = ask("How many models do you want to visualize?", default="1", cast=int)
+    num_models = ask("Number of models to visualize", default="1", cast=int)
 
-    # ----------------------------------------------------------------------
-    # ENVIRONMENT SELECTION
-    # ----------------------------------------------------------------------
-    env_id = ask("Environment ID", default="MiniGrid-Empty-8x8-v0")
+    env_id = ask("Environment ID", default="simple")
 
-    # infer action dimension
-    tmp_env = gym.make(env_id)
+    # Build factory + temporary env
+    env_factory, tmp_env = build_env_factory(env_id)
+
+    # Determine action_dim
     if not hasattr(tmp_env.action_space, "n"):
-        print("\nERROR: This visualization pipeline only supports DISCRETE action spaces.\n")
+        print("ERROR: Only discrete action spaces supported.")
         sys.exit(1)
+
     action_dim = tmp_env.action_space.n
     tmp_env.close()
 
-    # ----------------------------------------------------------------------
-    # MODEL SELECTION
-    # ----------------------------------------------------------------------
+    # Collect model configs
     model_cfgs = []
-
     for i in range(num_models):
         print(f"\n--- Model {i+1} ---")
+        algo = ask("Algorithm", default="lsd")
 
-        algo = ask("Algorithm", default="lsd").lower()
-        if algo not in ADAPTER_REGISTRY:
-            print(f"Unknown algorithm '{algo}'")
-            sys.exit(1)
-
-        # Create algorithm-specific folders
         ckpt_folder = ensure_dir(f"checkpoints/{algo}")
-        vis_folder = ensure_dir(f"visualizations/{algo}")
+        vis_folder  = ensure_dir(f"visualizations/{algo}")
+        ckpt = ask("Checkpoint path", default=f"{ckpt_folder}/latest.pth")
 
-        print(f"Checkpoint folder: {ckpt_folder}")
+        model_cfgs.append(ModelConfig(
+            algo=algo,
+            checkpoint_path=ckpt,
+            action_dim=action_dim,
+            skill_dim=8,
+            adapter_kwargs={"save_dir": vis_folder},
+        ))
 
-        # Ask for checkpoint file
-        ckpt = ask("Path to checkpoint", default=str(ckpt_folder / "latest.pth"))
-
-        model_cfgs.append(
-            ModelConfig(
-                algo=algo,
-                checkpoint_path=ckpt,
-                action_dim=action_dim,
-                skill_dim=8,  # all algos use 8 discrete skills
-                adapter_kwargs={"save_dir": str(vis_folder)},  # optional
-            )
-        )
-
-    # ----------------------------------------------------------------------
-    # VISUALIZATION SETTINGS
-    # ----------------------------------------------------------------------
+    # Visualization parameters
     horizon = ask("Max steps per trajectory", default="200", cast=int)
-    episodes = ask("Num episodes per model", default="5", cast=int)
-    deterministic = ask("Deterministic actions? (0/1)", default="0", cast=int)
+    episodes = ask("Num episodes per model", default="3", cast=int)
+    deterministic = bool(ask("Deterministic actions? (0/1)", default="0", cast=int))
     seed = ask("Seed", default="0", cast=int)
 
-    deterministic_flag = bool(deterministic)
-
     # ----------------------------------------------------------------------
-    # BUILD VISUALIZER
+    # Build visualizer configuration
     # ----------------------------------------------------------------------
     vis_cfg = VisualizerConfig(
-        env=EnvConfig(factory=make_env_factory(env_id)),
+        env=EnvConfig(factory=env_factory),
         models=model_cfgs,
         horizon=horizon,
         num_episodes=episodes,
-        deterministic=deterministic_flag,
+        deterministic=deterministic,
         seed=seed,
+        position_fn=unified_position_fn,
     )
 
+    # ----------------------------------------------------------------------
+    # Visualization
+    # ----------------------------------------------------------------------
     print("\nLoading models...")
     visualizer = SingleVisualizer(vis_cfg)
 
-    print("\nSampling trajectories...")
+    print("Sampling trajectories...")
+
+    visualizer.update_relative_motion = update_relative_motion
+
     trajectories = visualizer.sample_trajectories()
 
-    print("\nPlotting trajectories...")
+    print("Plotting trajectories...")
     visualizer.plot_trajectories(trajectories)
 
     print("\nVisualization complete.\n")
 
 
-# ============================================================================
-# ENTRY POINT
-# ============================================================================
 
 if __name__ == "__main__":
     main()

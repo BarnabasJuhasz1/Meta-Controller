@@ -1,227 +1,178 @@
 # SingleVisualizer.py
-from __future__ import annotations
 
+from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
-from dataclasses import dataclass, field
-from typing import Callable, Dict, Any, List, Sequence
 
-import gymnasium as gym
-
-from SingleEnvWrapper import SingleEnvWrapper
-from SingleLoader import ModelConfig, load_model_from_config
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Any
 
 
-# =====================================================================
-# CONFIG STRUCTURES
-# =====================================================================
+# ============================================================================
+# Dataclasses for configs
+# ============================================================================
 
 @dataclass
 class EnvConfig:
-    """
-    How to create the environment.
-
-    Either:
-        env_id="MiniGrid-Empty-8x8-v0"
-    OR
-        factory=my_custom_env_constructor
-    """
-    env_id: str | None = None
-    env_kwargs: Dict[str, Any] = field(default_factory=dict)
-    factory: Callable[[], gym.Env] | None = None
+    factory: Callable[[], Any]  # callable that returns env instances
 
 
 @dataclass
 class VisualizerConfig:
     env: EnvConfig
-    models: Sequence[ModelConfig]
-
-    horizon: int = 200
-    num_episodes: int = 1
-    deterministic: bool = False
-    seed: int = 0
-
-    # Optional: a function that returns a 2D position for plotting
-    # signature: fn(env, obs, info) -> np.array([x, y])
-    position_fn: Callable[[gym.Env, Any, dict], np.ndarray] | None = None
+    models: list               # list[ModelConfig]
+    horizon: int
+    num_episodes: int
+    deterministic: bool
+    seed: int
+    position_fn: Callable      # unified_position_fn
 
 
-# =====================================================================
-# VISUALIZER
-# =====================================================================
+# ============================================================================
+# SingleVisualizer
+# ============================================================================
 
 class SingleVisualizer:
     """
-    The unified, adapter-based visualization tool.
-
-    This class:
-    - loads all models using SingleLoader
-    - creates wrapped envs
-    - samples trajectories for each model
-    - plots them side-by-side
-
-    IMPORTANT:
-    This file knows *nothing* about any algorithm internals.
-    It only calls adapter functions.
+    Unified visualization helper that:
+    - Loads multiple models (via SingleLoader)
+    - Samples trajectories
+    - Plots trajectories on top of environment background
     """
 
     def __init__(self, cfg: VisualizerConfig):
         self.cfg = cfg
+        self.env_config = cfg.env
+        self.models = cfg.models
+        self.horizon = cfg.horizon
+        self.num_episodes = cfg.num_episodes
+        self.deterministic = cfg.deterministic
         self.seed = cfg.seed
-        self.rng = np.random.default_rng(self.seed)
+        self.position_fn = cfg.position_fn
 
-        # Load all models & adapters from the registry system
-        self.loaded_models = []   # list of (algo_name, adapter, model)
-        for model_cfg in cfg.models:
-            adapter, model = load_model_from_config(model_cfg)
-            self.loaded_models.append((model_cfg.algo, adapter, model))
+        # loader is imported here to avoid circular imports
+        from SingleLoader import load_model_from_config
+        self.model_interfaces = [load_model_from_config(m) for m in self.models]
 
-        # default position extractor if none provided
-        if cfg.position_fn is None:
-            self.position_fn = self._default_position_fn
-        else:
-            self.position_fn = cfg.position_fn
+    # ----------------------------------------------------------------------
+    # Helper to run one episode for one model
+    # ----------------------------------------------------------------------
+    def _run_episode(self, model_interface):
+        env = self.env_config.factory()
+        obs, _ = env.reset(seed=self.seed)
 
-    # --------------------------------------------------------------
-    # ENV CREATION
-    # --------------------------------------------------------------
+        traj = []
+        pos = self.position_fn(env, obs, {})
+        traj.append(pos)
 
-    def _make_env(self) -> gym.Env:
-        ecfg = self.cfg.env
-        if ecfg.factory is not None:
-            return ecfg.factory()
-        elif ecfg.env_id is not None:
-            return gym.make(ecfg.env_id, **ecfg.env_kwargs)
-        else:
-            raise ValueError("EnvConfig must have either env_id or factory defined.")
+        for t in range(self.horizon):
+            # compute action
+            action = model_interface.get_action(obs, deterministic=self.deterministic)
 
-    # --------------------------------------------------------------
-    # POSITION EXTRACTION
-    # --------------------------------------------------------------
+            # step env
+            obs, reward, terminated, truncated, info = env.step(action)
 
-    @staticmethod
-    def _default_position_fn(env: gym.Env, obs: Any, info: dict) -> np.ndarray:
-        """
-        Default: flatten observation and take the first 2 dims.
-        For MiniGrid this gives (tile0, tile1) — roughly okay.
-        For custom envs you should override this with a better function.
-        """
-        try:
-            arr = np.asarray(obs, dtype=np.float32).reshape(-1)
-        except Exception:
-            return np.zeros(2, dtype=np.float32)
-        if arr.size < 2:
-            return np.zeros(2, dtype=np.float32)
-        return arr[:2]
+            # store last_action so relative tracker can use it
+            setattr(env, "_last_action", int(action))
 
-    # --------------------------------------------------------------
-    # SAMPLE TRAJECTORIES FOR A SINGLE MODEL
-    # --------------------------------------------------------------
+            # update relative motion if needed
+            if hasattr(self, "update_relative_motion"):
+                self.update_relative_motion(env)
 
-    def _sample_single_model(self, algo_name: str, adapter, model) -> np.ndarray:
-        """
-        Returns trajectories of shape:
-            (num_episodes, horizon, 2)
-        """
+            # extract position
+            pos = self.position_fn(env, obs, info)
+            traj.append(pos)
 
-        env = self._make_env()
-        wrapped = SingleEnvWrapper(env, model, adapter)
-
-        trajectories = []
-
-        for ep in range(self.cfg.num_episodes):
-            obs, info = wrapped.reset(seed=self.seed + ep)
-
-            ep_positions = []
-
-            # one skill per episode
-            skill = adapter.sample_skill(self.rng)
-
-            for t in range(self.cfg.horizon):
-                # record position
-                pos = self.position_fn(wrapped.env, obs, info)
-                ep_positions.append(pos)
-
-                obs, _, terminated, truncated, info, _ = wrapped.step_with_model(
-                    skill,
-                    deterministic=self.cfg.deterministic,
-                )
-
-                if terminated or truncated:
-                    obs, info = wrapped.reset()
-
-            ep_positions = np.stack(ep_positions, axis=0)
-            trajectories.append(ep_positions)
-
-        wrapped.close()
-        return np.stack(trajectories, axis=0)
-
-    # --------------------------------------------------------------
-    # SAMPLE ALL TRAJECTORIES
-    # --------------------------------------------------------------
-
-    def sample_trajectories(self) -> Dict[str, np.ndarray]:
-        out = {}
-        for algo_name, adapter, model in self.loaded_models:
-            trajs = self._sample_single_model(algo_name, adapter, model)
-            out[algo_name] = trajs
-        return out
-
-    # --------------------------------------------------------------
-    # PLOT TRAJECTORIES
-    # --------------------------------------------------------------
-
-    def plot_trajectories(self, trajectories: Dict[str, np.ndarray]):
-        num_models = len(trajectories)
-        if num_models == 0:
-            raise ValueError("No trajectories to plot.")
-
-        fig, axes = plt.subplots(
-            1, num_models,
-            figsize=(5 * num_models, 5),
-            squeeze=False
-        )
-        axes = axes[0]
-
-        for ax, (algo_name, trajs) in zip(axes, trajectories.items()):
-            for ep_traj in trajs:
-                ax.plot(ep_traj[:, 0], ep_traj[:, 1], alpha=0.6)
-
-            ax.set_title(f"{algo_name.upper()}")
-            ax.set_xlabel("x")
-            ax.set_ylabel("y")
-            ax.grid(True)
-            ax.set_aspect("equal", adjustable="box")
-
-        plt.tight_layout()
-        plt.show()
-
-    # --------------------------------------------------------------
-    # LIVE ROLL OUT
-    # --------------------------------------------------------------
-
-    def render_rollout(self, model_idx: int = 0, max_steps: int | None = None):
-        if not self.loaded_models:
-            raise RuntimeError("No models loaded.")
-
-        algo_name, adapter, model = self.loaded_models[model_idx]
-        env = self._make_env()
-        env = SingleEnvWrapper(env, model, adapter)
-
-        obs, info = env.reset()
-        skill = adapter.sample_skill(self.rng)
-
-        if max_steps is None:
-            max_steps = self.cfg.horizon
-
-        for t in range(max_steps):
-            env.render()
-
-            obs, _, terminated, truncated, info, _ = env.step_with_model(
-                skill,
-                deterministic=self.cfg.deterministic,
-            )
             if terminated or truncated:
                 break
 
-        env.close()
+        return np.array(traj, dtype=np.float32)
+
+    # ----------------------------------------------------------------------
+    # Sample trajectories for all models
+    # ----------------------------------------------------------------------
+    def sample_trajectories(self):
+        results = {}
+
+        for mconfig, model in zip(self.models, self.model_interfaces):
+            name = mconfig.algo
+            results[name] = []
+            print(f"[Visualizer] Sampling {self.num_episodes} episodes for {name}...")
+
+            for ep in range(self.num_episodes):
+                traj = self._run_episode(model)
+                results[name].append(traj)
+
+        return results
+
+    # ----------------------------------------------------------------------
+    # METRA-style visualization
+    # ----------------------------------------------------------------------
+    def plot_trajectories(self, trajectories: Dict[str, List[np.ndarray]]):
+        """
+        Draw environment (rgb_array) background, then overlay all trajectories.
+        Each model gets one permanent color.
+        """
+
+        # create one environment just to draw background
+        env_bg = self.env_config.factory()
+        try:
+            bg = env_bg.render()  # must be rgb_array
+        except:
+            bg = None
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+
+        # ------------------------------------------------------------------
+        # 1. Draw background
+        # ------------------------------------------------------------------
+        if bg is not None:
+            H, W, _ = bg.shape
+            ax.imshow(bg, origin="lower")
+        else:
+            ax.set_facecolor("black")
+
+        # ------------------------------------------------------------------
+        # 2. Assign model colors (shades not needed since each model has 1 color)
+        # ------------------------------------------------------------------
+        base_colors = [
+            "#1f77b4",  # blue
+            "#d62728",  # red
+            "#2ca02c",  # green
+            "#9467bd",  # purple
+            "#ff7f0e",  # orange
+            "#17becf"   # cyan
+        ]
+
+        colors = {}
+        for i, mconfig in enumerate(self.models):
+            colors[mconfig.algo] = base_colors[i % len(base_colors)]
+
+        # ------------------------------------------------------------------
+        # 3. Overlay all trajectories
+        # ------------------------------------------------------------------
+        for model_name, traj_list in trajectories.items():
+            color = colors[model_name]
+
+            for traj in traj_list:
+                traj = np.array(traj)
+                if len(traj) < 2:
+                    continue
+                ax.plot(traj[:, 0], traj[:, 1],
+                        color=color, alpha=0.7, linewidth=1.2)
+
+        # ------------------------------------------------------------------
+        # 4. Clean formatting
+        # ------------------------------------------------------------------
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.grid(False)
+
+        if len(self.models) == 1:
+            ax.set_title(self.models[0].algo.upper(), fontsize=16)
+        else:
+            ax.set_title("Trajectory Overlay", fontsize=16)
+
+        ax.set_aspect("equal")
+        plt.tight_layout()
+        plt.show()
