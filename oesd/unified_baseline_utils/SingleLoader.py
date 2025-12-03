@@ -60,7 +60,7 @@ def load_model_from_config(cfg: ModelConfig) -> BaseAdapter:
             save_dir=cfg.adapter_kwargs.get("save_dir", "./")
         )
         return adapter
-    elif algo_name == "RSD":
+    elif algo_name == "rsd":
         adapter = RSDAdapter(
             algo_name=algo_name,
             ckpt_path=cfg.checkpoint_path,
@@ -68,6 +68,14 @@ def load_model_from_config(cfg: ModelConfig) -> BaseAdapter:
             save_dir=cfg.adapter_kwargs.get("save_dir", "./")
         )
         return adapter
+    
+    elif algo_name == "dads":
+        pass
+    elif algo_name == "metra":
+        pass
+    elif algo_name == "dyan":
+        pass
+
 
 
     # ------------------------------------------------------------
