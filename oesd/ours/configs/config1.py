@@ -9,6 +9,14 @@ SKILL_DIM = 8
 model_cfgs = []
 
 model_cfgs.append(ModelConfig(
+    algo_name="DIAYN",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DIAYN/.."),
+    action_dim=None,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DIAYN")},
+))
+
+model_cfgs.append(ModelConfig(
     algo_name="LSD",
     checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/.."),
     action_dim=None,
