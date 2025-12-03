@@ -8,6 +8,7 @@ import torch
 import os
 import importlib
 
+from oesd.ours.unified_baseline_utils.adapters.diayn_adapter import DIAYNAdapter
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 from oesd.ours.unified_baseline_utils.adapters.LSD_adapter import LSDAdapter
 from oesd.ours.unified_baseline_utils.adapters.RSD_adapter import RSDAdapter
@@ -55,15 +56,22 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
             skill_registry=skill_registry
         )
         return adapter
+
+    elif "diayn" in algo_name:
+        adapter = DIAYNAdapter(
+            algo_name=algo_name,
+            ckpt_path=cfg.checkpoint_path,
+            action_dim=cfg.action_dim,
+            save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
+            skill_registry=skill_registry
+        )
+        return adapter
     
     elif algo_name == "dads":
         pass
     elif algo_name == "metra":
         pass
-    elif algo_name == "dyan":
-        pass
-
-
+    
 
     # ------------------------------------------------------------
     # ADD FUTURE ALGORITHMS HERE
