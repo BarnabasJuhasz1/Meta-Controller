@@ -8,16 +8,30 @@ import os
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 
-# --- 1. IMPORT YOUR AGENT ---
-# We point to your Documents folder to find 'models.py'
-YOUR_CODE_DIR = r"C:\Users\sajay\Documents\continual_diayn"
-if YOUR_CODE_DIR not in sys.path:
-    sys.path.append(YOUR_CODE_DIR)
+# ============================================================================
+# 1. IMPORT YOUR AGENT (Relative Path Fix)
+# ============================================================================
+
+# We construct the path relative to the root of the project
+# This assumes the script is run from the project root
+DYAN_REPO_PATH = os.path.abspath(os.path.join("oesd", "baselines", "dyan"))
+
+# Add to system path if not present
+if DYAN_REPO_PATH not in sys.path:
+    sys.path.append(DYAN_REPO_PATH)
 
 try:
+    # Try importing directly (if sys.path worked)
     from models import Agent
 except ImportError:
-    print(f"❌ Error: Could not import 'models' from {YOUR_CODE_DIR}")
+    # Fallback: Try importing as a python module
+    try:
+        from oesd.baselines.dyan.models import Agent
+    except ImportError:
+        print(f"❌ Error: Could not import 'models.py' or 'Agent' class.")
+        print(f"   Expected location: {DYAN_REPO_PATH}")
+        print(f"   Make sure 'models.py' and '__init__.py' exist in that folder.")
+        raise
 
 # ============================================================================
 # DIAYN Adapter
