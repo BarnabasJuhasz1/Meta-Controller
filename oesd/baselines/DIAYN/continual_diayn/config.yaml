@@ -1,0 +1,34 @@
+
+# PPO-DIAYN Configuration for DoorKey-8x8
+
+env:
+  id: "MiniGrid-DoorKey-8x8-v0"
+  num_envs: 8              # Parallel environments (Critical for speed)
+  max_steps: 500           # Steps per episode
+
+agent:
+  skill_dim: 8             # 8 Distinct Skills (Corners, Key, Door, Goal)
+  lr: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_coef: 0.2           # PPO Clipping (Stability)
+  ent_coef: 0.05           # Entropy (Exploration)
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+training:
+  total_timesteps: 2000000 # 2M steps (approx 30-45 mins on GPU)
+  num_steps: 128           # Rollout length per env
+  batch_size: 256          # Optimization batch size
+  update_epochs: 4         # PPO epochs per update
+  discriminator_lr: 0.0003
+  
+  # Reward Weights (The "Recipe" for success)
+  diayn_scale: 1.0         # Exploration
+  key_bonus: 5.0           # Incentive to hold key
+  door_bonus: 5.0          # Incentive to cross the wall
+  win_bonus: 100.0         # Incentive to reach goal
+
+logging:
+  save_interval: 20        # Save every N updates
+  device: "cuda"           # Force CUDA if available
