@@ -26,7 +26,9 @@ model_cfgs.append(ModelConfig(
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "RSD")},
 ))
 
-'''model_cfgs.append(ModelConfig(
+'''
+DIAYN_REPO_PATH = os.path.join("oesd", "baselines", "dyan", "diayn_doorkey.pth")
+model_cfgs.append(ModelConfig(
     algo_name="DIAYN",
     checkpoint_path=DIAYN_REPO_PATH,
     action_dim=7,
