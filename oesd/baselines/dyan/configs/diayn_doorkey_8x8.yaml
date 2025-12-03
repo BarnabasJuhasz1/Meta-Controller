@@ -1,0 +1,31 @@
+# ----------------------------
+# ENVIRONMENT
+# ----------------------------
+env_id: MiniGrid-DoorKey-8x8-v0
+obs_type: rgb
+max_steps: 200
+
+# ----------------------------
+# AGENT
+# ----------------------------
+agent:
+  skill_dim: 8
+  obs_dim: 147
+  action_dim: 7
+  hidden_dim: 256
+
+# ----------------------------
+# TRAINING
+# ----------------------------
+training:
+  total_steps: 300000
+  episode_limit: 200
+  batch_size: 64
+  gamma: 0.99
+  lr: 3e-4
+
+# ----------------------------
+# MODEL SAVE / LOGGING
+# ----------------------------
+log_interval: 1000
+save_interval: 10000

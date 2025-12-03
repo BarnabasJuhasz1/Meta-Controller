@@ -4,7 +4,7 @@ from typing import Any
 
 import torch
 import numpy as np
-
+from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 
 import sys
