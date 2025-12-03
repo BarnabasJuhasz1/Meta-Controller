@@ -1,0 +1,96 @@
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.callbacks import EvalCallback
+
+from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
+from oesd.ours.contoller.meta_env_wrapper import MetaControllerEnv
+from oesd.ours.unified_baseline_utils.SingleLoader import load_model_from_config, load_config
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--env_name", type=str, default="minigrid")
+parser.add_argument("--skill_count_per_algo", type=int, default=10)
+parser.add_argument("--skill_duration", type=int, default=10)
+parser.add_argument("--num_timesteps", type=int, default=100000)
+parser.add_argument("--learning_rate", type=float, default=3e-4)
+parser.add_argument("--n_steps", type=int, default=2048)
+parser.add_argument("--batch_size", type=int, default=64)
+parser.add_argument("--gamma", type=float, default=0.99)
+parser.add_argument("--verbose", type=int, default=1)
+parser.add_argument("--tensorboard_log", type=str, default="ours/train_results/logs/")
+parser.add_argument("--save_path", type=str, default="ours/train_results/")
+parser.add_argument("--config_path", type=str, default="ours/configs/config1.py")
+
+# --- 1. Setup Phase ---
+
+# # Mock function to simulate loading your checkpoints
+# def load_my_policy(path): 
+#     # Return your actual model object (e.g., a PyTorch nn.Module)
+#     pass 
+
+# # Initialize Registry
+# registry = SkillRegistry()
+
+# # Register skills from your different sources [cite: 87]
+# # Example: 10 skills from DIAYN, 10 from DADS
+# registry.register_baseline(load_my_policy, "../baseline_checkpoints/RSD/diayn_v1.pt", num_skills=8, z_dim=50)
+# registry.register_baseline(load_my_policy, "../baseline_checkpoints/DADS/dads_v1.pt", num_skills=8, z_dim=10)
+
+# # --- 2. Environment Setup ---
+
+# # Initialize your MiniGrid environment
+# # Ensure it is wrapped to provide flat observations or handle Dict observations if using MultiInputPolicy
+# import minigrid
+# base_env = gym.make("MiniGrid-Empty-8x8-v0", render_mode="rgb_array")
+# base_env = minigrid.wrappers.ImgObsWrapper(base_env) # Example wrapper to get just the image
+
+# # Wrap it with our Meta-Controller logic
+# meta_env = MetaControllerEnv(base_env, registry, skill_duration=10)
+
+def main(_A: argparse.Namespace):
+
+    # initialize skill registry
+    skill_registry = SkillRegistry(_A.skill_count_per_algo)
+
+    # load model configs from config file
+    config = load_config(_A.config_path)
+    
+    # load models via adapters (while feeding skill_registry to adapters)
+    model_interfaces = [load_model_from_config(m, skill_registry=skill_registry) for m in config.model_cfgs]
+
+    # initialize environment
+    meta_env = MetaControllerEnv(skill_registry, model_interfaces, env_name=_A.env_name, skill_duration=_A.skill_duration)
+
+    # integrate later to shared environment init
+    # env_factory, tmp_env = build_env_factory(_A.env_name)
+
+    from stable_baselines3.common.env_checker import check_env
+    # If this passes without error, your migration is successful
+    check_env(meta_env)
+
+    # vectorize environment for PPO efficiency
+    vec_env = DummyVecEnv([lambda: meta_env])
+
+    # initialize model
+    model = PPO(
+        "CnnPolicy",       # Use CNN if input is pixels (MiniGrid), "MlpPolicy" if flat
+        vec_env,
+        learning_rate=3e-4,
+        n_steps=2048,
+        batch_size=64,
+        gamma=0.99,       
+        verbose=1,
+        tensorboard_log="./meta_ppo_tensorboard/"
+    )
+
+    # train model
+    print("Starting training of Meta-Controller...")
+    model.learn(total_timesteps=_A.num_timesteps)
+
+    # save model
+    model.save(_A.save_path)
+
+if __name__ == "__main__":
+    _A = parser.parse_args()
+    main(_A)

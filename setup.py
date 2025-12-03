@@ -6,5 +6,6 @@ setup(
     version="1.0",
     python_requires=">=3.9",
     zip_safe=True,
-    packages=find_packages(include=["oesd"]),
+    # packages=find_packages(include=["oesd"]),
+    packages=find_packages(include=["oesd", "oesd.*"]),
 )
