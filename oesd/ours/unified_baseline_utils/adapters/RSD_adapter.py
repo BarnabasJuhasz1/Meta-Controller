@@ -132,20 +132,22 @@ class RSDAdapter(BaseAdapter):
         """
         Unified action interface:
         """
-        assert skill_z in self.skill_registry.get_(skill_z), "skill_z must be in the list of skills!"
+        assert self.skill_registry.does_skill_belong_to_algo(self.algo_name, skill_z), f"skill_z must be in the list of skills for this algo ({self.algo_name})!"
 
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         skill_tensor = torch.from_numpy(skill_z).float().unsqueeze(0).to(self.device)
 
         with torch.no_grad():
-            if hasattr(self.option_policy, 'process_observations'):
-                print("observations ARE processed inside get_action")
-                processed_obs = self.option_policy.process_observations(obs_tensor)
-            else:
-                print("observations are NOT processed inside get_action")
-                processed_obs = obs_tensor
 
-            concat_obs = torch.cat([processed_obs, skill_tensor], dim=1)
+            # I disabled processing inside so we process unified in the env wrapper
+            # if hasattr(self.option_policy, 'process_observations'):
+            #     # print("observations ARE processed inside get_action")
+            #     processed_obs = self.option_policy.process_observations(obs_tensor)
+            # else:
+            #     # print("observations are NOT processed inside get_action")
+            #     processed_obs = obs_tensor
+            # concat_obs = torch.cat([processed_obs, skill_tensor], dim=1)
+            concat_obs = torch.cat([obs_tensor, skill_tensor], dim=1)
 
             with torch.no_grad():
                 dist, _ = self.option_policy(concat_obs)

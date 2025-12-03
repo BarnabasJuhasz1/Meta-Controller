@@ -19,7 +19,7 @@ class SkillRegistry:
         
         assert len(skill_list) == self.skill_count_per_algo, f"Skill list must have {self.skill_count_per_algo} skills, got {len(skill_list)}"
         
-        self.bag_of_skills.append(skill_list)
+        self.bag_of_skills.extend(skill_list)
         self.algos.append(algo)
 
         print(f"Registered {algo} with skills: {skill_list}")
@@ -47,7 +47,11 @@ class SkillRegistry:
         Returns True if the skill belongs to the algorithm.
         """
         assert algo_name in self.algos, f"Algorithm {algo_name} not registered"
-        return skill_z in self.get_skills_belonging_to_algo(algo_name)
+        skills = self.get_skills_belonging_to_algo(algo_name)
+        for s in skills:
+            if np.array_equal(s, skill_z):
+                return True
+        return False
 
     def get_skill_from_skill_idx(self, global_skill_idx):
         """

@@ -6,6 +6,7 @@ from gymnasium import spaces
 import akro
 import matplotlib.pyplot as plt
 import random
+import torch
 
 from minigrid.minigrid_env import MiniGridEnv
 from minigrid.core.mission import MissionSpace
@@ -38,23 +39,22 @@ class MetaControllerEnv(gym.Env):
         self._action_scale = action_scale
         self.model_interfaces = model_interfaces
 
-        # Action Space: Select one of the frozen skills
-        # self.action_space = spaces.Discrete(self.registry.num_actions)
-        self._discrete_actions = [
-            self._env.actions.forward,
-            self._env.actions.left,
-            self._env.actions.right,
-            self._env.actions.pickup,
-            self._env.actions.drop,
-            self._env.actions.toggle,
-        ]
-        self._num_actions = len(self._discrete_actions)
-        self.action_space = spaces.Box(
-            low=-action_scale,
-            high=action_scale,
-            shape=(self._num_actions,),
-            dtype=np.float32,
-        )
+        # self._discrete_actions = [
+        #     self._env.actions.forward,
+        #     self._env.actions.left,
+        #     self._env.actions.right,
+        #     self._env.actions.pickup,
+        #     self._env.actions.drop,
+        #     self._env.actions.toggle,
+        # ]
+        # self._num_actions = len(self._discrete_actions)
+        # self.action_space = spaces.Box(
+        #     low=-action_scale,
+        #     high=action_scale,
+        #     shape=(self._num_actions,),
+        #     dtype=np.float32,
+        # )
+        self.action_space = spaces.Discrete(len(self.registry.bag_of_skills))
 
         self.env_name = env_name
 
@@ -81,9 +81,9 @@ class MetaControllerEnv(gym.Env):
             obs, _ = result
         else:
             obs = result
-        self._last_obs = self._process_obs(obs)
+        self._last_raw_obs = obs
         info = {}
-        return self._last_obs, info
+        return self._process_obs(obs), info
 
     def _map_action(self, action):
         if action.ndim == 0:
@@ -133,7 +133,7 @@ class MetaControllerEnv(gym.Env):
         terminated = False
         truncated = False
 
-        print("STEP CALLED WITH SKILL INDEX: {}".format(global_skill_idx))
+        # print("STEP CALLED WITH SKILL INDEX: {}".format(global_skill_idx))
 
         # 1. DECODE: Retrieve the specific model and z vector
         # This handles the "Selection of skill & model" automatically
@@ -144,7 +144,7 @@ class MetaControllerEnv(gym.Env):
             # 1. Get current observation from environment
             # Note: We need the LAST observation to query the policy
             # (In a real implementation, cache 'obs' from the loop start)
-            current_obs = self._process_obs(self.last_obs)
+            current_obs = self._process_obs(self._last_raw_obs)
 
             # 2. Ask the specific sub-skill for a primitive action
             # We use the current observation (self.last_obs) 
@@ -153,14 +153,14 @@ class MetaControllerEnv(gym.Env):
                 primitive_action = self.model_interfaces[algo_name].get_action(current_obs, z_vector)
             
             # 3. Step the physical environment
-            obs, reward, terminated, truncated, info = self._env.step(primitive_action)
+            obs, reward, terminated, truncated, info = self._env.step(self._map_action(primitive_action))
             
             if render:
                 frame = self._env.render()
                 if frame is not None:
                     info['render'] = frame.transpose(2, 0, 1)
 
-            self.last_obs = obs # Update for next micro-step
+            self._last_raw_obs = obs # Update for next micro-step
             
             total_reward += reward
             
@@ -169,7 +169,7 @@ class MetaControllerEnv(gym.Env):
                 break
                 
         # Return the aggregated experience to the Meta-Controller
-        return obs, total_reward, terminated, truncated, info
+        return self._process_obs(self._last_raw_obs), total_reward, terminated, truncated, info
 
     # Helper to capture the obs for the registry
     # def reset(self, **kwargs):
