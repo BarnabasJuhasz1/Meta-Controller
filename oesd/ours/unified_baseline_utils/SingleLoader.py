@@ -46,11 +46,7 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
             skill_registry=skill_registry
         )
         return adapter
-<<<<<<< HEAD:oesd/unified_baseline_utils/SingleLoader.py
-    elif algo_name == "rsd":
-=======
     elif "rsd" in algo_name:
->>>>>>> juhasz:oesd/ours/unified_baseline_utils/SingleLoader.py
         adapter = RSDAdapter(
             algo_name=algo_name,
             ckpt_path=cfg.checkpoint_path,
