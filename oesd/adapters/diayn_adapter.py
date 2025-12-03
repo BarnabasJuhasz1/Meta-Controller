@@ -4,41 +4,37 @@ import numpy as np
 import sys
 import os
 
-# Import the Base Adapter
+# Base Class
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 
 # ============================================================================
-# IMPORT PATH FIX
+# 1. IMPORT YOUR AGENT (Relative Path Fix)
 # ============================================================================
-# We add the new location to the system path so Python can find 'models.py'
-# Current Path: oesd/baselines/dyan
 
-# 1. Define the new path
-# (Using os.path.join ensures it works on Windows and Linux)
-DIAN_PATH = os.path.abspath(os.path.join("oesd", "baselines", "dyan"))
+# We construct the path relative to the root of the project
+DYAN_REPO_PATH = os.path.abspath(os.path.join("oesd", "baselines", "dyan"))
 
-# 2. Add to Python Path
-if DIAN_PATH not in sys.path:
-    sys.path.append(DIAN_PATH)
+# Add to system path if not present
+if DYAN_REPO_PATH not in sys.path:
+    sys.path.append(DYAN_REPO_PATH)
 
-# 3. Import the Agent
 try:
-    # Try importing as a package first (Best Practice)
-    from oesd.baselines.dyan.models import Agent
+    # Try importing directly (if sys.path worked)
+    from models import Agent
 except ImportError:
+    # Fallback: Try importing as a python module
     try:
-        # Fallback: Try importing directly since we added it to sys.path
-        from models import Agent
+        from oesd.baselines.dyan.models import Agent
     except ImportError:
-        print(f"CRITICAL ERROR: Could not import 'Agent' from {DIAN_PATH}")
-        print(f"Please ensure 'models.py' exists inside {DIAN_PATH}")
-        print(f"And ensure the folder has an empty '__init__.py' file.")
+        print(f"❌ Error: Could not import 'models.py' or 'Agent' class.")
+        print(f"   Expected location: {DYAN_REPO_PATH}")
+        print(f"   Make sure 'models.py' and '__init__.py' exist in that folder.")
+        raise
 
 # ============================================================================
-# DIAYN Adapter
+# DIAYN Adapter Class (Rest of your code remains the same)
 # ============================================================================
-
 class DIAYNAdapter(BaseAdapter):
     """
     Adapter for the PPO-DIAYN implementation.
