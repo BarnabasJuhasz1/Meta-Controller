@@ -1,114 +1,157 @@
-from __future__ import annotations
 import torch
+import torch.nn as nn
 import numpy as np
-import sys
 import os
-
-# Base Class
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
-from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 
-# ============================================================================
-# 1. IMPORT YOUR AGENT (Relative Path Fix)
-# ============================================================================
+# ==============================================================================
+# 1. Define the "Legacy" Architecture (Matches your checkpoint)
+# ==============================================================================
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
 
-# We construct the path relative to the root of the project
-# This assumes the script is run from the project root
-DYAN_REPO_PATH = os.path.abspath(os.path.join("oesd", "baselines", "dyan"))
+class LegacyEncoder(nn.Module):
+    def __init__(self, feature_dim=256): 
+        super().__init__()
+        self.conv = nn.Sequential(
+            layer_init(nn.Conv2d(3, 16, 2)), nn.ReLU(),
+            layer_init(nn.Conv2d(16, 32, 2)), nn.ReLU(),
+            nn.Flatten()
+        )
+        self.state_fc = nn.Sequential(layer_init(nn.Linear(3, 32)), nn.ReLU())
+        self.fusion = layer_init(nn.Linear(800 + 32, feature_dim))
+        self.ln = nn.LayerNorm(feature_dim)
+        self.feature_dim = feature_dim
 
-# Add to system path if not present
-if DYAN_REPO_PATH not in sys.path:
-    sys.path.append(DYAN_REPO_PATH)
+    def forward(self, img, state):
+        x = self.conv(img)
+        y = self.state_fc(state)
+        combined = torch.cat([x, y], dim=1)
+        return self.ln(self.fusion(combined))
 
-try:
-    # Try importing directly (if sys.path worked)
-    from models import Agent
-except ImportError:
-    # Fallback: Try importing as a python module
-    try:
-        from oesd.baselines.dyan.models import Agent
-    except ImportError:
-        print(f"❌ Error: Could not import 'models.py' or 'Agent' class.")
-        print(f"   Expected location: {DYAN_REPO_PATH}")
-        print(f"   Make sure 'models.py' and '__init__.py' exist in that folder.")
-        raise
+class LegacyAgent(nn.Module):
+    def __init__(self, action_dim, skill_dim):
+        super().__init__()
+        self.encoder = LegacyEncoder()
+        self.actor = nn.Sequential(
+            layer_init(nn.Linear(self.encoder.feature_dim + skill_dim, 256)),
+            nn.Tanh(),
+            layer_init(nn.Linear(256, 256)),
+            nn.Tanh(),
+            layer_init(nn.Linear(256, action_dim), std=0.01),
+        )
 
-# ============================================================================
-# DIAYN Adapter
-# ============================================================================
+    def get_action_and_value(self, img, state, skill):
+        features = self.encoder(img, state)
+        input_vec = torch.cat([features, skill], dim=1)
+        logits = self.actor(input_vec)
+        probs = torch.distributions.Categorical(logits=logits)
+        return probs.sample(), None, None, None
+
+# ==============================================================================
+# 2. The Adapter Class (Robust Version)
+# ==============================================================================
 
 class DIAYNAdapter(BaseAdapter):
-    """
-    Adapter for PPO-DIAYN.
-    Matches the style of LSDAdapter.
-    """
+    def __init__(
+        self,
+        algo_name: str,
+        ckpt_path: str,
+        action_dim: int,
+        skill_dim: int, 
+        save_dir: str = "./",
+        skill_registry = None,
+        device: str = "cpu"
+    ):
+        super().__init__(
+            algo_name=algo_name, 
+            ckpt_path=ckpt_path, 
+            action_dim=action_dim, 
+            save_dir=save_dir, 
+            skill_registry=skill_registry
+        )
 
-    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
-        super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
-
-        # 1. Initialize Agent Architecture
-        self.skill_dim = 8  # Hardcoded based on your training
-        self.agent = Agent(action_dim=action_dim, skill_dim=self.skill_dim).to(self.device)
-
-        # 2. Load Weights
-        try:
-            checkpoint = torch.load(ckpt_path, map_location=self.device)
-            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-                self.agent.load_state_dict(checkpoint['model_state_dict'])
-            else:
-                self.agent.load_state_dict(checkpoint)
-            print(f"✅ DIAYN Weights loaded from {ckpt_path}")
-        except Exception as e:
-            print(f"❌ Failed to load DIAYN: {e}")
-            raise e
-
-        self.agent.eval()
-
-    def get_action(self, obs, skill_z, deterministic=False):
-        """
-        Unified action interface.
-        """
-        # --- Prepare Skill ---
-        # Handle int index (0-7) or tensor input
-        if isinstance(skill_z, (int, np.integer)):
-            idx = int(skill_z)
-            skill_vec = torch.zeros(1, self.skill_dim).to(self.device)
-            skill_vec[0][idx] = 1.0
-        elif isinstance(skill_z, torch.Tensor):
-            if skill_z.numel() == 1: # It's an index inside a tensor
-                idx = int(skill_z.item())
-                skill_vec = torch.zeros(1, self.skill_dim).to(self.device)
-                skill_vec[0][idx] = 1.0
-            else: # It's already a vector
-                skill_vec = skill_z.to(self.device)
-                if skill_vec.ndim == 1: skill_vec = skill_vec.unsqueeze(0)
-        else:
-            # Fallback for numpy arrays
-            skill_vec = torch.tensor(skill_z).float().to(self.device)
-            if skill_vec.ndim == 1: skill_vec = skill_vec.unsqueeze(0)
-
-        # --- Prepare Observation ---
-        # Un-flatten the vector back into Image + State
-        if not torch.is_tensor(obs):
-            obs_t = torch.tensor(obs, dtype=torch.float32).to(self.device)
-        else:
-            obs_t = obs.to(self.device)
+        self.device = device
+        self.skill_dim = skill_dim
         
-        if obs_t.ndim == 1:
-            obs_t = obs_t.unsqueeze(0)
+        # --- INTERNAL SKILL STATE ---
+        self.current_skill = torch.zeros(1, skill_dim).to(self.device)
+        self.current_skill[0, 0] = 1.0  # Default to Skill 0
+        
+        print(f"[DIAYNAdapter] Initializing Legacy Agent (Action: {action_dim}, Skill: {skill_dim})")
 
-        # Logic based on MetaEnv wrapper structure:
-        # [Image(147), Direction(1), Carrying(1), X(1), Y(1)]
-        x = obs_t[:, -2]
-        y = obs_t[:, -1]
-        key = obs_t[:, -3]
-        state_vec = torch.stack([x, y, key], dim=1)
+        self.model = LegacyAgent(action_dim=action_dim, skill_dim=skill_dim)
+        self.model.to(self.device)
 
-        img_flat = obs_t[:, :147]
-        img_vec = img_flat.view(-1, 3, 7, 7) # Reshape 147 -> 3x7x7
+        if ckpt_path and os.path.exists(ckpt_path):
+            print(f"[DIAYNAdapter] Loading checkpoint from {ckpt_path}")
+            checkpoint = torch.load(ckpt_path, map_location=self.device, weights_only=False)
+            
+            if isinstance(checkpoint, dict):
+                if 'encoder' in checkpoint:
+                    self.model.encoder.load_state_dict(checkpoint['encoder'])
+                    print(" - Encoder loaded.")
+                
+                if 'policy' in checkpoint:
+                    raw_policy = checkpoint['policy']
+                    clean_policy = {}
+                    for k, v in raw_policy.items():
+                        new_key = k.replace("net.", "") 
+                        clean_policy[new_key] = v
+                    try:
+                        self.model.actor.load_state_dict(clean_policy)
+                        print(" - Actor (Policy) loaded (fixed 'net.' keys).")
+                    except Exception as e:
+                        print(f" - Error loading actor: {e}")
+                elif 'actor' in checkpoint:
+                    self.model.actor.load_state_dict(checkpoint['actor'])
+            else:
+                self.model.load_state_dict(checkpoint, strict=False)
+        else:
+            print(f"[DIAYNAdapter] Warning: Checkpoint path '{ckpt_path}' not found!")
 
-        # --- Forward Pass ---
+        self.model.eval()
+
+    def set_skill(self, skill_idx):
+        """Helper to change the active skill"""
+        self.current_skill = torch.zeros(1, self.skill_dim).to(self.device)
+        self.current_skill[0, skill_idx % self.skill_dim] = 1.0
+
+    # --- ROBUST GET_ACTION ---
+    def get_action(self, obs, deterministic=True):
+        # 1. Handle Dictionary Observations (Standard Minigrid)
+        if isinstance(obs, dict):
+            img = obs.get('image')
+            if img is None:
+                img = obs.get('visual') # Some wrappers use 'visual'
+            state = obs.get('state', torch.zeros(1, 3).to(self.device))
+            
+        # 2. Handle Array Observations (Wrapped/Raw Image)
+        else:
+            # Assume 'obs' IS the image if it's not a dict
+            img = obs
+            state = torch.zeros(1, 3).to(self.device)
+
+        # 3. Convert to Tensor if needed
+        if not torch.is_tensor(img):
+            img = torch.tensor(img, dtype=torch.float32).to(self.device)
+        if not torch.is_tensor(state):
+            state = torch.tensor(state, dtype=torch.float32).to(self.device)
+
+        # 4. Handle Dimensions (Batch & Permute)
+        if img.ndim == 3: 
+            img = img.unsqueeze(0) # Add batch dim (B, H, W, C)
+        
+        if state.ndim == 1: 
+            state = state.unsqueeze(0)
+        
+        # Permute (B, H, W, C) -> (B, C, H, W) for PyTorch Conv2d
+        if img.shape[-1] == 3: 
+            img = img.permute(0, 3, 1, 2)
+
         with torch.no_grad():
-            action, _, _, _ = self.agent.get_action_and_value(img_vec, state_vec, skill_vec)
-
-        return action.item()
+            action, _, _, _ = self.model.get_action_and_value(img, state, self.current_skill)
+            
+        return action.cpu().numpy()
