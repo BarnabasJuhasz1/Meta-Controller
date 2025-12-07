@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from models import HybridEncoder, Policy, Discriminator
+from models import HybridEncoder, Agent, Discriminator
 
 class DIAYNAgent:
     def __init__(self, env, config):
@@ -21,7 +21,7 @@ class DIAYNAgent:
         
         # Models
         self.encoder = HybridEncoder(self.action_dim).to(self.device)
-        self.policy = Policy(256, self.skill_dim, self.action_dim).to(self.device)
+        self.policy = Agent(256, self.skill_dim, self.action_dim).to(self.device)
         self.discriminator = Discriminator(self.skill_dim).to(self.device)
         
         # Optimizers

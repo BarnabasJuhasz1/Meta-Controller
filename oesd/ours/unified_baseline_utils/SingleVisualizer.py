@@ -103,7 +103,7 @@ class SingleVisualizer:
         results = {}
 
         for mconfig, model in zip(self.models, self.model_interfaces):
-            name = mconfig.algo
+            name = mconfig.algo_name
             results[name] = []
             print(f"[Visualizer] Sampling {self.num_episodes} episodes for {name}...")
 
@@ -154,7 +154,7 @@ class SingleVisualizer:
 
         colors = {}
         for i, mconfig in enumerate(self.models):
-            colors[mconfig.algo] = base_colors[i % len(base_colors)]
+            colors[mconfig.algo_name] = base_colors[i % len(base_colors)]
 
         # ------------------------------------------------------------------
         # 3. Overlay all trajectories
@@ -177,7 +177,7 @@ class SingleVisualizer:
         ax.grid(False)
 
         if len(self.models) == 1:
-            ax.set_title(self.models[0].algo.upper(), fontsize=16)
+            ax.set_title(self.models[0].algo_name.upper(), fontsize=16)
         else:
             ax.set_title("Trajectory Overlay", fontsize=16)
 

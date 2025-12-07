@@ -167,7 +167,7 @@ def unified_position_fn(env, obs, info):
 
 parser = argparse.ArgumentParser(description="Unified Baseline Utils")
 # parser.add_argument("--mode", type=str, default="visualize", choices=["train", "visualize"])
-parser.add_argument("--algo_name", type=str, default="RSD", choices=["LSD", "RSD"])
+parser.add_argument("--algo_name", type=str, default="RSD", choices=["LSD", "RSD", "DIAYN"])
 parser.add_argument("--env_name", type=str, default="minigrid")
 parser.add_argument("--horizon", type=int, default=200)
 parser.add_argument("--episodes", type=int, default=3)
@@ -177,6 +177,7 @@ parser.add_argument("--render_mode", type=str, default="rgb_array")
 parser.add_argument("--skill_idx", type=int, default=0)
 parser.add_argument("--config", type=str, default="configs/config1.py")
 parser.add_argument("--skill_count", type=int, default=8)
+parser.add_argument("--checkpoint_path", type=str, default=None, help="Override checkpoint path from config")
 
 
 def main(_A: argparse.Namespace):
@@ -186,6 +187,17 @@ def main(_A: argparse.Namespace):
 
     # load model configs from config file
     config = load_config(_A.config)
+
+    # 1. Override Checkpoint Path
+    if _A.checkpoint_path and hasattr(config, 'model_cfgs'):
+        for model_cfg in config.model_cfgs:
+            model_cfg.checkpoint_path = _A.checkpoint_path
+
+    # 2. Override Skill Dimension (THIS IS THE FIX)
+    if _A.skill_count and hasattr(config, 'model_cfgs'):
+        for model_cfg in config.model_cfgs:
+            # Force the model config to use the CLI skill count
+            model_cfg.skill_dim = _A.skill_count
 
     # build visualizer config
     vis_cfg = VisualizerConfig(
@@ -203,9 +215,9 @@ def main(_A: argparse.Namespace):
 
     # visualizer.update_relative_motion = update_relative_motion
 
-    # trajectories = visualizer.sample_trajectories()
+    trajectories = visualizer.sample_trajectories()
 
-    # visualizer.plot_trajectories(trajectories)
+    visualizer.plot_trajectories(trajectories)
 
     print("\nVisualization complete.\n")
 
