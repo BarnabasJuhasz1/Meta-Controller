@@ -90,10 +90,8 @@ def main(_A: argparse.Namespace):
     )
 
     # train model
-    # train model
     print("Starting training of Meta-Controller...")
 
-    
     checkpoint_callback = CheckpointCallback(
         save_freq=_A.checkpoint_freq * _A.n_steps,
         save_path=os.path.join(_A.save_path, "checkpoints"),

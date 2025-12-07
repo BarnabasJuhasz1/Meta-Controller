@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Default model path (can be overridden)
-MODEL_PATH="ours/train_results/checkpoints/rl_model_61440_steps.zip"
+MODEL_PATH="ours/train_results/checkpoints/rl_model_3070_steps.zip"
 
 /home/juhasz/miniforge3/envs/rsd/bin/python ours/contoller/run_controller.py \
     --env_name minigrid \
