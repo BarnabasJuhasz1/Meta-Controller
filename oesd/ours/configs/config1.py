@@ -28,7 +28,7 @@ model_cfgs.append(ModelConfig(
 #     checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/lsd_latest.pth"),
 #     action_dim=ACTION_DIM,
 #     skill_dim=SKILL_DIM,
-#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
+#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "RSD")},
 # ))
 
 model_cfgs.append(ModelConfig(

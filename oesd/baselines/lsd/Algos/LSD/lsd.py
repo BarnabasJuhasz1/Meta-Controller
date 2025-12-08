@@ -28,8 +28,6 @@ Fully compatible with your console interface:
     python lsd.py skills
     python lsd.py phi
     python lsd.py zero_shot
-
-Author: ChatGPT (rewritten on request)
 """
 
 from __future__ import annotations
