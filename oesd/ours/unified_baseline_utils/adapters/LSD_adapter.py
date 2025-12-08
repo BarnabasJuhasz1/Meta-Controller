@@ -19,7 +19,7 @@ class LSDAdapter(BaseAdapter):
     """
 
     def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
-        super().__init__(algo_name, ckpt_path, action_dim, save_dir)
+        super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry=skill_registry)
 
         # Load trainer + model weights
         cfg = LSDConfig()
@@ -33,6 +33,8 @@ class LSDAdapter(BaseAdapter):
         # Always use a default skill (e.g., 0) unless user overrides
         self.current_skill_idx = 0
         self.current_skill_vec = self.trainer.discrete_Z[self.current_skill_idx]
+
+        
 
     def set_skill(self, idx: int):
         self.current_skill_idx = int(idx)

@@ -57,9 +57,7 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
         )
         return adapter
  
-    elif "diayn" in algo_name:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+    elif "diayn" in algo_name:        
         adapter = DIAYNAdapter(
             algo_name=algo_name,
             ckpt_path=cfg.checkpoint_path,
@@ -67,7 +65,6 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
             skill_dim=cfg.skill_dim,
             save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
             skill_registry=skill_registry,
-            device=device
         )
         return adapter
     

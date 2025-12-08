@@ -25,6 +25,10 @@ parser.add_argument("--tensorboard_log", type=str, default="ours/train_results/l
 parser.add_argument("--save_path", type=str, default="ours/train_results/")
 parser.add_argument("--config_path", type=str, default="ours/configs/config1.py")
 parser.add_argument("--checkpoint_freq", type=int, default=20, help="Save model every k epochs")
+parser.add_argument("--render-mode", type=str, default="rgb_array")
+parser.add_argument("--key_pickup_reward", type=float, default=0.1, help="Reward for picking up the key (once per episode)")
+parser.add_argument("--door_open_reward", type=float, default=0.5, help="Reward for opening the door (once per episode)")
+parser.add_argument("--device", type=str, default="cpu", help="Device to run on (cpu or cuda)")
 
 # --- 1. Setup Phase ---
 
@@ -65,13 +69,19 @@ def main(_A: argparse.Namespace):
     model_interfaces = {adapter.algo_name: adapter for adapter in adapters}
 
     # initialize environment
-    meta_env = MetaControllerEnv(skill_registry, model_interfaces, env_name=_A.env_name, skill_duration=_A.skill_duration)
+    meta_env = MetaControllerEnv(skill_registry,
+                                model_interfaces,
+                                env_name=_A.env_name,
+                                skill_duration=_A.skill_duration,
+                                render_mode=_A.render_mode,
+                                key_pickup_reward=_A.key_pickup_reward,
+                                door_open_reward=_A.door_open_reward)
 
     # integrate later to shared environment init
     # env_factory, tmp_env = build_env_factory(_A.env_name)
 
     from stable_baselines3.common.env_checker import check_env
-    # If this passes without error, your migration is successful
+    # to make sure our meta environment is in the format stable baselines expects
     check_env(meta_env)
 
     # vectorize environment for PPO efficiency
@@ -79,14 +89,15 @@ def main(_A: argparse.Namespace):
 
     # initialize model
     model = PPO(
-        "MlpPolicy",       # Use CNN if input is pixels (MiniGrid), "MlpPolicy" if flat
+        "MlpPolicy", # Use CNN if input is pixels (MiniGrid), "MlpPolicy" if flat
         vec_env,
         learning_rate=_A.learning_rate,
         n_steps=_A.n_steps,
         batch_size=_A.batch_size,
         gamma=_A.gamma,       
         verbose=_A.verbose,
-        tensorboard_log=_A.tensorboard_log
+        tensorboard_log=_A.tensorboard_log,
+        device = _A.device
     )
 
     # train model

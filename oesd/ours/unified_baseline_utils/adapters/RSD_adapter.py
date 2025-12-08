@@ -82,8 +82,7 @@ class RSDAdapter(BaseAdapter):
     def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
         # also makes sure self.device and self.skill_registry are set
         super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
-        
-        # option_policy_path = os.path.join(ckpt_path, f'option_policy{epoch}.pt')
+    
         self.option_policy_ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
 
         self.discrete = self.option_policy_ckpt['discrete']
@@ -98,7 +97,6 @@ class RSDAdapter(BaseAdapter):
         self.option_policy = self.option_policy_ckpt['policy']
         self.option_policy.eval()
         self.option_policy = self.option_policy.to(self.device)
-
 
     def init_skill_vector(self, k, unit_length=False):
         """

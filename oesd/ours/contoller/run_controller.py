@@ -53,7 +53,7 @@ def main(_A: argparse.Namespace):
         
         while not (terminated or truncated):
             # Predict action
-            action, _states = model.predict(obs, deterministic=True)
+            action, _states = model.predict(obs, deterministic=False)
             
             # Step environment
             # We pass render=True to see the environment
