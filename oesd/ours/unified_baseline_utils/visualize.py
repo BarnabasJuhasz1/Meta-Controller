@@ -54,6 +54,7 @@ def build_env_factory(env_id: str, max_steps: int = 200, render_mode: str = "rgb
     # SIMPLE ENV SPECIAL CASE
     if env_id == "simple":
         from scripts.testing.example_minigrid import SimpleEnv
+    
 
         def factory():
             return SimpleEnv(size=8, max_steps=max_steps, render_mode=render_mode)
