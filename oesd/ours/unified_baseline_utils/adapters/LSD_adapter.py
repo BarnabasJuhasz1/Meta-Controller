@@ -26,15 +26,12 @@ class LSDAdapter(BaseAdapter):
         self.trainer = LSDTrainer(cfg)
         self.trainer.load(ckpt_path)
 
-        self.action_dim = action_dim
         self.skill_dim = self.trainer.cfg.skill_dim
-        self.save_dir = save_dir
 
         # Always use a default skill (e.g., 0) unless user overrides
         self.current_skill_idx = 0
         self.current_skill_vec = self.trainer.discrete_Z[self.current_skill_idx]
 
-        
 
     def set_skill(self, idx: int):
         self.current_skill_idx = int(idx)
