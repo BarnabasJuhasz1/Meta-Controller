@@ -5,12 +5,7 @@ from typing import Any
 
 import torch
 import numpy as np
-<<<<<<< HEAD
-from oesd.algorithms.lsd import LSDTrainer, LSDConfig
-from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
-=======
 from oesd.baselines.lsd.Algos.LSD.lsd import LSDTrainer, LSDConfig
->>>>>>> origin/lennart
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 
@@ -25,11 +20,7 @@ class LSDAdapter(BaseAdapter):
     """
 
     def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
-<<<<<<< HEAD
-        super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry=skill_registry)
-=======
         super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
->>>>>>> origin/lennart
 
         # Load trainer + model weights
         cfg = LSDConfig()
@@ -63,13 +54,19 @@ class LSDAdapter(BaseAdapter):
         skill_vec = self.skill_registry.sample(self.algo_name)
         return skill_vec
 
-    def get_action(self, obs, deterministic=False, skill_z=None):
+    
+    def get_action(self, obs, skill_z, deterministic=False):
         """
         Unified action interface:
         obs -> tensor -> pass through LSD policy -> primitive action
         
         If skill_z is provided, use it; otherwise use current_skill_vec.
+
+        Expects obs to be processed observation, but can be any shape of (X,)!
         """
+        # CUT THE OBS TO THE SHAPE OF (147,) AS LSD EXPECTS IT
+        obs = obs[:147]
+
         if skill_z is not None:
             # Convert to tensor if needed
             if isinstance(skill_z, np.ndarray):
@@ -79,8 +76,8 @@ class LSDAdapter(BaseAdapter):
         else:
             z_tensor = self.current_skill_vec
 
-        ovec = self.trainer._obs_to_vec(obs)
-        o = self.trainer._obs_to_tensor(ovec)
+        # ovec = self.trainer._obs_to_vec(obs)
+        o = self.trainer._obs_to_tensor(obs)
 
         z = z_tensor.unsqueeze(0) if z_tensor.dim() == 1 else z_tensor
         logits, _ = self.trainer.policy(o, z)
@@ -93,3 +90,8 @@ class LSDAdapter(BaseAdapter):
             act = dist.sample()
 
         return int(act.item())
+
+    def process_obs(self, obs, env):
+        return self.trainer._obs_to_vec(obs)
+
+        # returned SHAPE: (147,)

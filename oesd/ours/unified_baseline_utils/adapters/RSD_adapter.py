@@ -152,3 +152,39 @@ class RSDAdapter(BaseAdapter):
                 action = dist.mean.cpu().numpy()[0]
 
         return action
+
+    def process_obs(self, obs, env):
+        if isinstance(obs, tuple):
+            obs = obs[0]
+        
+        # 1. Flatten and normalize image
+        image = obs["image"].astype(np.float32) / 255.0
+        
+        # 2. Normalize direction (0-3 becomes 0.0-1.0)
+        direction = np.array([obs["direction"] / 3.0], dtype=np.float32)
+
+        # 3. Add Carrying (Binary)
+        # Accessing .unwrapped is safer in case of other wrappers
+        # env_base = self.env.unwrapped 
+        carrying_val = 1.0 if env.carrying is not None else 0.0
+        carrying = np.array([carrying_val], dtype=np.float32)
+
+        # 4. Add Agent Position (Normalized)
+        # We divide by width/height to keep inputs within [0, 1] range
+        agent_x = env.agent_pos[0] / env.width
+        agent_y = env.agent_pos[1] / env.height
+        position = np.array([agent_x, agent_y], dtype=np.float32)
+
+        # debug print
+        # if carrying_val > 0:
+        #     print(f"AGENT CARRYING at {self._env.agent_pos}")
+        
+        # Concatenate everything: [Image flat, Direction, Carrying, PosX, PosY]
+        return np.concatenate([
+            image.flatten(), 
+            direction, 
+            carrying, 
+            # position
+        ], axis=0)
+
+        # returned SHAPE: (149,)

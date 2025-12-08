@@ -42,6 +42,7 @@ class MetaControllerEnv(gym.Env):
         # Reward shaping parameters
         self.key_pickup_reward = kwargs.get("key_pickup_reward", 0.0)
         self.door_open_reward = kwargs.get("door_open_reward", 0.0)
+        self.key_drop_reward = kwargs.get("key_drop_reward", 0.0)
         
         # Visualization tracking
         self.current_algo = "None"
@@ -65,6 +66,28 @@ class MetaControllerEnv(gym.Env):
         #     shape=(self._num_actions,),
         #     dtype=np.float32,
         # )
+
+        base_env = self._env.unwrapped  # accessing the core environment behind all wrappers
+
+        # Try printing these common attributes to see which one exists:
+        # try:
+        #     print(f"Grid Size: {base_env.width} x {base_env.height}") # Common in MiniGrid
+        # except AttributeError:
+        #     pass
+
+        # try:
+        #     print(f"Grid Shape: {base_env.grid_size}") # Common in some custom envs
+        # except AttributeError:
+        #     pass
+
+        # try:
+        #     print(f"Arena Size: {base_env.arena.width} x {base_env.arena.height}") # Common in continuous envs
+        # except AttributeError:
+        #     pass
+
+
+
+
         self.action_space = spaces.Discrete(len(self.registry.bag_of_skills))
 
         self.env_name = env_name
@@ -76,9 +99,11 @@ class MetaControllerEnv(gym.Env):
             initial_obs = reset_result
         sample_obs = self._process_obs(initial_obs)
         self.observation_space = spaces.Box(
-            low=0.0,
-            high=1.0,
-            shape=sample_obs.shape,
+            # low=0.0,
+            # high=1.0,
+            low = -np.inf,
+            high= np.inf,
+            shape=sample_obs.shape, # this should be the largest obs shape of all algorithms
             dtype=np.float32,
         )
         self._last_obs = sample_obs
@@ -108,44 +133,32 @@ class MetaControllerEnv(gym.Env):
         return self._process_obs(obs), info
 
     def _map_action(self, action):
+        if isinstance(action, int):
+            return action
         if action.ndim == 0:
             return int(action)
         return int(np.argmax(action))
 
+    
     def _process_obs(self, obs):
-        if isinstance(obs, tuple):
-            obs = obs[0]
-        
-        # 1. Flatten and normalize image
-        image = obs["image"].astype(np.float32) / 255.0
-        
-        # 2. Normalize direction (0-3 becomes 0.0-1.0)
-        direction = np.array([obs["direction"] / 3.0], dtype=np.float32)
+        """
+            just a process observation wrapper,
+            each algorithm implements its own expected way of processing observations
+            
+        """
+        if self.current_algo == "None":
+            # return self._process_obs_for_meta_controller(obs)
+            return self.model_interfaces['rsd'].process_obs(obs, self._env)
 
-        # 3. Add Carrying (Binary)
-        # Accessing .unwrapped is safer in case of other wrappers
-        # env_base = self.env.unwrapped 
-        carrying_val = 1.0 if self._env.carrying is not None else 0.0
-        carrying = np.array([carrying_val], dtype=np.float32)
+        processed_obs = self.model_interfaces[self.current_algo].process_obs(obs, self._env)
 
-        # 4. Add Agent Position (Normalized)
-        # We divide by width/height to keep inputs within [0, 1] range
-        agent_x = self._env.agent_pos[0] / self._env.width
-        agent_y = self._env.agent_pos[1] / self._env.height
-        position = np.array([agent_x, agent_y], dtype=np.float32)
+        # returned SHAPE should always be (149,)
+        current_size = processed_obs.shape[0]
+        padding = np.zeros(149-current_size, dtype=np.float32)
+        return np.concatenate((processed_obs, padding))
 
-        # debug print
-        # if carrying_val > 0:
-        #     print(f"AGENT CARRYING at {self._env.agent_pos}")
-        
-        # Concatenate everything: [Image flat, Direction, Carrying, PosX, PosY]
-        return np.concatenate([
-            image.flatten(), 
-            direction, 
-            carrying, 
-            # position
-        ], axis=0)
-
+    def _process_obs_for_meta_controller(self, obs):
+        pass
 
     def step(self, global_skill_idx, render=False):
         """
@@ -182,14 +195,29 @@ class MetaControllerEnv(gym.Env):
             # We use the current observation (self.last_obs) 
             # primitive_action = self.registry.get_action(action, self.last_obs)
             with torch.no_grad():
-                primitive_action = self.model_interfaces[algo_name].get_action(current_obs, z_vector)
+                primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
             
             # Update title before step if human rendering, because minigrid might render in step
             if self.render_mode == "human":
                 self._update_window_title()
 
             # 3. Step the physical environment
-            obs, reward, terminated, truncated, info = self._env.step(self._map_action(primitive_action))
+            
+            # Check if we are carrying a key BEFORE the step
+            was_carrying_key = isinstance(self._env.carrying, Key)
+            
+            mapped_action = self._map_action(primitive_action)
+            obs, reward, terminated, truncated, info = self._env.step(mapped_action)
+            
+            # Check if we are carrying a key AFTER the step
+            is_carrying_key = isinstance(self._env.carrying, Key)
+
+            # If we were carrying a key, and now we are not, AND the action was DROP
+            # then we apply the penalty (reward is usually negative)
+            if was_carrying_key and not is_carrying_key:
+                if mapped_action == self._env.actions.drop:
+                    reward += self.key_drop_reward
+                    # print(f"KEY DROPPED! Penalty applied: {self.key_drop_reward}")
             
             if render:
                 # Use our custom render to update title
@@ -222,7 +250,7 @@ class MetaControllerEnv(gym.Env):
             # If the task is solved or failed during the skill, stop early
             if terminated or truncated:
                 break
-                
+            
         # Return the aggregated experience to the Meta-Controller
         return self._process_obs(self._last_raw_obs), total_reward, terminated, truncated, info
 

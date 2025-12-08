@@ -10,6 +10,7 @@ class BaseAdapter:
     """
     Every adapter must implement:
         - get_action(obs, deterministic)
+        - process_obs(obs)
     """
     def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
         self.algo_name = algo_name
@@ -22,4 +23,7 @@ class BaseAdapter:
         print(f"Loading {self.algo_name} checkpoints from {self.ckpt_path}. Action dim: {self.action_dim}")
 
     def get_action(self, obs, skill_z, deterministic=False):
+        raise NotImplementedError
+
+    def process_obs(self, obs, env):
         raise NotImplementedError

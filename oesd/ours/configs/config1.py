@@ -15,21 +15,21 @@ ACTION_DIM = 6
 
 model_cfgs = []
 
-model_cfgs.append(ModelConfig(
-    algo_name="DIAYN",
-    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DIAYN/diayn_doorkey.pth"),
-    action_dim=ACTION_DIM,
-    skill_dim=SKILL_DIM,
-    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DIAYN")},
-))
-
 # model_cfgs.append(ModelConfig(
-#     algo_name="LSD",
-#     checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/lsd_latest.pth"),
+#     algo_name="DIAYN",
+#     checkpoint_path=os.path.join(CHECKPOINT_PATH, "DIAYN/diayn_doorkey.pth"),
 #     action_dim=ACTION_DIM,
 #     skill_dim=SKILL_DIM,
-#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "RSD")},
+#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DIAYN")},
 # ))
+
+model_cfgs.append(ModelConfig(
+    algo_name="LSD",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/lsd_latest.pth"),
+    action_dim=ACTION_DIM,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
+))
 
 model_cfgs.append(ModelConfig(
     algo_name="RSD",

@@ -120,9 +120,5 @@ def load_config(config_path: str):
     # Create the module object and execute it
     config_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(config_module)
-<<<<<<< HEAD
-
+    
     return config_module
-=======
-    return config_module
->>>>>>> origin/lennart
