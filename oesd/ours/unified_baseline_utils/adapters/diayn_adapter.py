@@ -137,6 +137,20 @@ class DIAYNAdapter(BaseAdapter):
             print(f"[DIAYNAdapter] Warning: Checkpoint path '{ckpt_path}' not found!")
 
         self.model.eval()
+        
+        # --- REGISTER SKILLS ---
+        if self.skill_registry:
+            print(f"[DIAYNAdapter] Registering {self.skill_dim} skills for {self.algo_name}...")
+            skill_list = []
+            for i in range(self.skill_dim):
+                z = np.zeros(self.skill_dim, dtype=np.float32)
+                z[i] = 1.0
+                skill_list.append(z)
+            
+            # Ensure we match the registry's expectation
+            # If registry expects count X and we have Y != X, we might need to pad/truncate or error.
+            # But let's assume config aligns them.
+            self.skill_registry.register_baseline(self.algo_name, skill_list)
 
     def set_skill(self, skill_idx):
         """Helper to change the active skill"""
@@ -153,6 +167,21 @@ class DIAYNAdapter(BaseAdapter):
     def preprocess_observation(self, raw_obs) -> np.ndarray:
         """Convert raw env obs into the model's required input vector."""
         return raw_obs
+
+    def process_obs(self, obs, env=None):
+        """
+        Process observation to return a flat numpy array (compatible with MetaControllerEnv).
+        """
+        if isinstance(obs, dict):
+            img = obs.get('image', obs.get('visual')) 
+        else:
+            img = obs
+            
+        if img is None:
+            # Fallback if no image found (e.g. flat obs already?)
+            return np.zeros(147, dtype=np.float32)
+
+        return img.flatten().astype(np.float32)
 
     def load_model(self, checkpoint_path: str):
         pass

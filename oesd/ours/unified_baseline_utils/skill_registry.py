@@ -19,7 +19,7 @@ class SkillRegistry:
         
         assert len(skill_list) == self.skill_count_per_algo, f"Skill list must have {self.skill_count_per_algo} skills, got {len(skill_list)}"
         
-        self.bag_of_skills.append(skill_list)
+        self.bag_of_skills.extend(skill_list)
         self.algos.append(algo)
 
         print(f"Registered {algo} with skills: {skill_list}")

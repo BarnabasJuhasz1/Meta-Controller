@@ -147,10 +147,12 @@ class MetaControllerEnv(gym.Env):
             
         """
         if self.current_algo == "None":
+            # Select default algo for obs processing if none active
             # return self._process_obs_for_meta_controller(obs)
-            return self.model_interfaces['rsd'].process_obs(obs, self._env)
-
-        processed_obs = self.model_interfaces[self.current_algo].process_obs(obs, self._env)
+            default_key = 'rsd' if 'rsd' in self.model_interfaces else list(self.model_interfaces.keys())[0]
+            processed_obs = self.model_interfaces[default_key].process_obs(obs, self._env)
+        else:
+            processed_obs = self.model_interfaces[self.current_algo].process_obs(obs, self._env)
 
         # returned SHAPE should always be (149,)
         current_size = processed_obs.shape[0]
@@ -195,7 +197,7 @@ class MetaControllerEnv(gym.Env):
             # We use the current observation (self.last_obs) 
             # primitive_action = self.registry.get_action(action, self.last_obs)
             with torch.no_grad():
-                primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
+                primitive_action = self.model_interfaces[self.current_algo].get_action(self._last_raw_obs, z_vector)
             
             # Update title before step if human rendering, because minigrid might render in step
             if self.render_mode == "human":
