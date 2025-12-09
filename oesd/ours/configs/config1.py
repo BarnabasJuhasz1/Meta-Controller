@@ -39,3 +39,10 @@ model_cfgs.append(ModelConfig(
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "RSD")},
 ))
 
+model_cfgs.append(ModelConfig(
+    algo_name="DADS",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DADS/dads_checkpoint.pth"),
+    action_dim=ACTION_DIM,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DADS")},
+))
