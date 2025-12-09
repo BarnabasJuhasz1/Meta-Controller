@@ -27,7 +27,6 @@ class MetaControllerEnv(gym.Env):
         action_scale=1.0,
         render_mode="rgb_array",
         **kwargs
-        **kwargs
     ):
         super().__init__()
         if env_name == "minigrid":
@@ -157,11 +156,6 @@ class MetaControllerEnv(gym.Env):
             low = -np.inf,
             high= np.inf,
             shape=sample_obs.shape, # this should be the largest obs shape of all algorithms
-            # low=0.0,
-            # high=1.0,
-            low = -np.inf,
-            high= np.inf,
-            shape=sample_obs.shape, # this should be the largest obs shape of all algorithms
             dtype=np.float32,
         )
         self._last_obs = sample_obs
@@ -201,7 +195,6 @@ class MetaControllerEnv(gym.Env):
         
         info = {}
         return self._process_obs(obs), info
-        return self._process_obs(obs), info
 
     def _map_action(self, action):
         if isinstance(action, int):
@@ -212,15 +205,14 @@ class MetaControllerEnv(gym.Env):
             return int(action)
         return int(np.argmax(action))
 
-    
 
-    
     def _process_obs(self, obs):
         """
             just a process observation wrapper,
             each algorithm implements its own expected way of processing observations
             
         """
+        
         if self.current_algo == "None":
             # return self._process_obs_for_meta_controller(obs)
             return self.model_interfaces['rsd'].process_obs(obs, self._env)
@@ -243,20 +235,9 @@ class MetaControllerEnv(gym.Env):
         terminated = False
         truncated = False
 
-        # print("STEP CALLED WITH SKILL INDEX: {}".format(global_skill_idx))
-        # print("STEP CALLED WITH SKILL INDEX: {}".format(global_skill_idx))
-
         # 1. DECODE: Retrieve the specific model and z vector
         # This handles the "Selection of skill & model" automatically
         algo_name, z_vector = self.registry.get_algo_and_skill_from_skill_idx(global_skill_idx)
-        
-        # Update tracking info
-        self.current_algo = algo_name
-        self.current_global_skill = global_skill_idx
-        # Calculate local skill index: global_idx % skills_per_algo
-        # Assuming skills are registered in blocks of equal size per algo as per registry implementation
-        self.current_local_skill = global_skill_idx % self.registry.skill_count_per_algo
-        self.current_step_in_skill = 0
         
         # Update tracking info
         self.current_algo = algo_name
@@ -270,20 +251,19 @@ class MetaControllerEnv(gym.Env):
         for step_i in range(self.skill_duration):
             self.current_step_in_skill = step_i + 1
             
-        for step_i in range(self.skill_duration):
-            self.current_step_in_skill = step_i + 1
-            
             # 1. Get current observation from environment
             # Note: We need the LAST observation to query the policy
             # (In a real implementation, cache 'obs' from the loop start)
-            current_obs = self._process_obs(self._last_raw_obs)
             current_obs = self._process_obs(self._last_raw_obs)
 
             # 2. Ask the specific sub-skill for a primitive action
             # We use the current observation (self.last_obs) 
             # primitive_action = self.registry.get_action(action, self.last_obs)
             with torch.no_grad():
-                primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
+                if self.current_algo == "diayn":
+                    primitive_action = self.model_interfaces[self.current_algo].get_action(self._last_raw_obs, z_vector)
+                else:
+                    primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
             
             # Update title before step if human rendering, because minigrid might render in step
             if self.render_mode == "human":
@@ -306,50 +286,12 @@ class MetaControllerEnv(gym.Env):
                 if mapped_action == self._env.actions.drop:
                     reward += self.key_drop_reward
                     # print(f"KEY DROPPED! Penalty applied: {self.key_drop_reward}")
-            
-            # Check if we are carrying a key BEFORE the step
-            was_carrying_key = isinstance(self._env.carrying, Key)
-            
-            mapped_action = self._map_action(primitive_action)
-            obs, reward, terminated, truncated, info = self._env.step(mapped_action)
-            
-            # Check if we are carrying a key AFTER the step
-            is_carrying_key = isinstance(self._env.carrying, Key)
 
-            # If we were carrying a key, and now we are not, AND the action was DROP
-            # then we apply the penalty (reward is usually negative)
-            if was_carrying_key and not is_carrying_key:
-                if mapped_action == self._env.actions.drop:
-                    reward += self.key_drop_reward
-                    # print(f"KEY DROPPED! Penalty applied: {self.key_drop_reward}")
-            
             if render:
-                # Use our custom render to update title
-                frame = self.render()
                 # Use our custom render to update title
                 frame = self.render()
                 if frame is not None:
                     info['render'] = frame.transpose(2, 0, 1)
-
-            self._last_raw_obs = obs # Update for next micro-step
-            
-            # --- Reward Shaping ---
-            # Check for Key Pickup
-            if not self._rewarded_key and self._env.carrying is not None:
-                if isinstance(self._env.carrying, Key):
-                    reward += self.key_pickup_reward
-                    self._rewarded_key = True
-            
-            # Check for Door Opening
-            if not self._rewarded_door:
-                # Find the door in the grid
-                # Note: This iterates over the grid, which is small (8x8), so it's cheap.
-                # If performance is critical, we could cache the door object or position.
-                for obj in self._env.grid.grid:
-                    if isinstance(obj, Door) and obj.is_open:
-                        reward += self.door_open_reward
-                        self._rewarded_door = True
-                        break
 
             self._last_raw_obs = obs # Update for next micro-step
             
@@ -379,7 +321,6 @@ class MetaControllerEnv(gym.Env):
             
             
         # Return the aggregated experience to the Meta-Controller
-        return self._process_obs(self._last_raw_obs), total_reward, terminated, truncated, info
         return self._process_obs(self._last_raw_obs), total_reward, terminated, truncated, info
 
     # Helper to capture the obs for the registry

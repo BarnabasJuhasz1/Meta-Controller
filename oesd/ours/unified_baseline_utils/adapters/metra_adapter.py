@@ -108,3 +108,7 @@ class MetraAdapter(BaseAdapter):
             action = torch.argmax(q_values, dim=1).item()
 
         return action
+
+    def process_obs(self, obs, env):
+        pass
+        # returned SHAPE: (147,)

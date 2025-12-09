@@ -177,10 +177,11 @@ class DIAYNAdapter(BaseAdapter):
         else:
             img = obs
             
-        if img is None:
-            # Fallback if no image found (e.g. flat obs already?)
-            return np.zeros(147, dtype=np.float32)
+        # if img is None:
+        #     # Fallback if no image found (e.g. flat obs already?)
+        #     return np.zeros(147, dtype=np.float32)
 
+        # returned SHAPE: (147,)
         return img.flatten().astype(np.float32)
 
     def load_model(self, checkpoint_path: str):
@@ -193,6 +194,9 @@ class DIAYNAdapter(BaseAdapter):
         skill_vec: np.ndarray = None,
         deterministic: bool = True
     ):
+        # CUT THE OBS TO THE SHAPE OF (147,) AS LSD EXPECTS IT
+        # obs = obs[:147]
+
         if skill_vec is not None:
              skill_tensor = torch.tensor(skill_vec, dtype=torch.float32).to(self.device).unsqueeze(0)
         else:
@@ -209,6 +213,8 @@ class DIAYNAdapter(BaseAdapter):
         else:
             img = obs
             state = torch.zeros(1, 3).to(self.device)
+
+        # img = obs.reshape(7, 7, 3)
 
         # 3. Convert to Tensor
         if not torch.is_tensor(img):

@@ -1,4 +1,5 @@
-$ModelPath = "oesd/ours/train_results/checkpoints/model.zip"
+# $ModelPath = "oesd/ours/train_results/checkpoints/model.zip"
+$ModelPath = "/home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/oesd/ours/train_results/checkpoints/rl_model_3200_steps.zip"
 $EnvName = "minigrid"
 
 # Check if model exists
