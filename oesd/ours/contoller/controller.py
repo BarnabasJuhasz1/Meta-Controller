@@ -28,7 +28,7 @@ parser.add_argument("--checkpoint_freq", type=int, default=20, help="Save model 
 parser.add_argument("--render-mode", type=str, default="rgb_array")
 parser.add_argument("--key_pickup_reward", type=float, default=0.1, help="Reward for picking up the key (once per episode)")
 parser.add_argument("--door_open_reward", type=float, default=0.5, help="Reward for opening the door (once per episode)")
-parser.add_argument("--key_drop_reward", type=float, default=0.0, help="Reward (usually negative) for dropping the key")
+parser.add_argument("--key_drop_reward", type=float, default=-0.2, help="Reward (usually negative) for dropping the key")
 parser.add_argument("--device", type=str, default="cpu", help="Device to run on (cpu or cuda)")
 
 # --- 1. Setup Phase ---
