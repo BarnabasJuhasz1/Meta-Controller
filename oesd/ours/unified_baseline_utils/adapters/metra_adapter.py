@@ -9,7 +9,7 @@ import os
 import torch
 import numpy as np
 from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
-from BaseAdapter import BaseAdapter   
+from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter   
 from oesd.baselines.metra.models import ModelManager
 
 
@@ -21,13 +21,13 @@ class MetraAdapter(BaseAdapter):
                  action_dim: int,
                  save_dir: str, 
                  skill_registry: SkillRegistry,
-                 n_skills: int = 5,
+                 skill_dim: int = 5,
                  latent_dim: int = 2,
                  modelManager=ModelManager(phiNum=3,polNum=3)):
         
         super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
 
-        self.n_skills = n_skills
+        self.skill_dim = skill_dim
         self.latent_dim = latent_dim
 
         # ============================
@@ -38,14 +38,14 @@ class MetraAdapter(BaseAdapter):
         PhiClass, PolicyClass = modelManager.giveModels()
 
         self.phi = PhiClass(latent_dim=latent_dim).to(self.device)
-        self.policy = PolicyClass(n_skills=n_skills, n_actions=action_dim).to(self.device)
-        self.skill_embeddings = torch.nn.Embedding(n_skills, latent_dim).to(self.device)
+        self.policy = PolicyClass(n_skills=skill_dim, n_actions=action_dim).to(self.device)
+        self.skill_embeddings = torch.nn.Embedding(skill_dim, latent_dim).to(self.device)
 
         # ============================
         # 2. LOAD CHECKPOINTS
         # ============================
-        phi_path = os.path.join(ckpt_path, "phi.pth")
-        policy_path = os.path.join(ckpt_path, "policy.pth")
+        phi_path = os.path.join(ckpt_path, "phiDiscreteSkill.pth")
+        policy_path = os.path.join(ckpt_path, "policyDiscreteSkill.pth")
         embed_path = os.path.join(ckpt_path, "skillEmbeddings.pth")
 
         print(f"[METRA] Loading φ from {phi_path}")
@@ -65,7 +65,7 @@ class MetraAdapter(BaseAdapter):
         # 3. REGISTER SKILLS
         # ============================
         skill_list = []
-        for k in range(n_skills):
+        for k in range(skill_dim):
             emb = self.skill_embeddings(torch.tensor([k], device=self.device)).detach().cpu().numpy()[0]
             skill_list.append(emb)
 
@@ -84,8 +84,7 @@ class MetraAdapter(BaseAdapter):
         """
 
         # Ensure skill_z comes from registry
-        assert skill_z in self.skill_registry.get_(self.algo_name), \
-            f"Skill not recognized or not registered for METRA adapter."
+        assert self.skill_registry.does_skill_belong_to_algo(self.algo_name, skill_z), f"skill_z must be in the list of skills for this algo ({self.algo_name})!"
 
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         skill_tensor = torch.tensor(skill_z, dtype=torch.float32).unsqueeze(0).to(self.device)
@@ -110,5 +109,16 @@ class MetraAdapter(BaseAdapter):
         return action
 
     def process_obs(self, obs, env):
-        pass
+
+        if isinstance(obs, dict):
+            if 'agent_pos' in obs:
+                return np.array(obs['agent_pos'], dtype=np.float32)
+            elif 'observation' in obs and hasattr(obs['observation'], 'agent_pos'):
+                print("METRAAA PROC OBS shape:", np.array(obs['observation'].agent_pos, dtype=np.float32))
+                return np.array(obs['observation'].agent_pos, dtype=np.float32)
+        
+        # Last resort: return zeros or raise error
+        print("Warning: Could not extract agent position, returning zeros")
+        return np.array([0, 0], dtype=np.float32)
+        
         # returned SHAPE: (147,)

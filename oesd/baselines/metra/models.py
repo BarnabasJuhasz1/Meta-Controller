@@ -5,7 +5,7 @@ import torch.nn as nn
 import random
 
 
-from metraTester import DiscreteSkillTester, MetraWrapper
+from oesd.baselines.metra.metraTester import DiscreteSkillTester, MetraWrapper
 
 
 class ModelManager:

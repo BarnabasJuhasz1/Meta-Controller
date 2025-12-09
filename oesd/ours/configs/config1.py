@@ -38,3 +38,19 @@ model_cfgs.append(ModelConfig(
     skill_dim=SKILL_DIM,
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DIAYN")},
 ))
+
+model_cfgs.append(ModelConfig(
+    algo_name="DADS",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DADS/dads_doorkey.pth"),
+    action_dim=ACTION_DIM,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DADS")},
+))
+
+# model_cfgs.append(ModelConfig(
+#     algo_name="METRA",
+#     checkpoint_path=os.path.join(CHECKPOINT_PATH, "METRA/"),
+#     action_dim=7,
+#     skill_dim=SKILL_DIM,
+#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "METRA")},
+# ))
