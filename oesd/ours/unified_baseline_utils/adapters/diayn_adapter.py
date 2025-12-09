@@ -119,6 +119,9 @@ class DIAYNAdapter(BaseAdapter):
                         print(" - Actor (Policy) loaded (fixed 'net.' keys).")
                     except Exception as e:
                         print(f" - Error loading actor: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Fallback: try loading directly if clean failed or keys match differently
                         # Fallback: try loading directly if clean failed or keys match differently
                         try:
                              self.model.actor.load_state_dict(raw_policy)
