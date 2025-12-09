@@ -5,7 +5,7 @@ import os
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 
 # ==============================================================================
-# 1. Define the "Legacy" Architecture (Matches your checkpoint)
+# 1. Define the "Legacy" Architecture (Matches checkpoint)
 # ==============================================================================
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -73,7 +73,7 @@ class DIAYNAdapter(BaseAdapter):
             skill_registry=skill_registry
         )
 
-        self.device = device
+        self.device = torch.device(device)
         self.skill_dim = skill_dim
         
         # --- INTERNAL SKILL STATE ---
@@ -87,8 +87,22 @@ class DIAYNAdapter(BaseAdapter):
 
         if ckpt_path and os.path.exists(ckpt_path):
             print(f"[DIAYNAdapter] Loading checkpoint from {ckpt_path}")
-            checkpoint = torch.load(ckpt_path, map_location=self.device, weights_only=False)
+            try:
+                checkpoint = torch.load(ckpt_path, map_location=self.device)
+            except Exception:
+                checkpoint = torch.load(ckpt_path, map_location=self.device, weights_only=False)
             
+            # Check if skill_dim is in checkpoint (from my recent update to agent.py)
+            if isinstance(checkpoint, dict) and 'skill_dim' in checkpoint:
+                 ckpt_skill_dim = checkpoint['skill_dim']
+                 if ckpt_skill_dim != self.skill_dim:
+                     print(f"[DIAYNAdapter] WARNING: Checkpoint skill_dim ({ckpt_skill_dim}) != Adapter skill_dim ({self.skill_dim}). Using Checkpoint value.")
+                     self.skill_dim = ckpt_skill_dim
+                     self.set_skill(0) # Reset current skill vector size
+                     # Re-init agent
+                     self.model = LegacyAgent(action_dim=action_dim, skill_dim=self.skill_dim)
+                     self.model.to(self.device)
+
             if isinstance(checkpoint, dict):
                 if 'encoder' in checkpoint:
                     self.model.encoder.load_state_dict(checkpoint['encoder'])
@@ -105,6 +119,16 @@ class DIAYNAdapter(BaseAdapter):
                         print(" - Actor (Policy) loaded (fixed 'net.' keys).")
                     except Exception as e:
                         print(f" - Error loading actor: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Fallback: try loading directly if clean failed or keys match differently
+                        # Fallback: try loading directly if clean failed or keys match differently
+                        try:
+                             self.model.actor.load_state_dict(raw_policy)
+                             print(" - Actor (Policy) loaded directly.")
+                        except:
+                             pass
+
                 elif 'actor' in checkpoint:
                     self.model.actor.load_state_dict(checkpoint['actor'])
             else:
@@ -113,45 +137,97 @@ class DIAYNAdapter(BaseAdapter):
             print(f"[DIAYNAdapter] Warning: Checkpoint path '{ckpt_path}' not found!")
 
         self.model.eval()
+        
+        # --- REGISTER SKILLS ---
+        if self.skill_registry:
+            print(f"[DIAYNAdapter] Registering {self.skill_dim} skills for {self.algo_name}...")
+            skill_list = []
+            for i in range(self.skill_dim):
+                z = np.zeros(self.skill_dim, dtype=np.float32)
+                z[i] = 1.0
+                skill_list.append(z)
+            
+            # Ensure we match the registry's expectation
+            # If registry expects count X and we have Y != X, we might need to pad/truncate or error.
+            # But let's assume config aligns them.
+            self.skill_registry.register_baseline(self.algo_name, skill_list)
 
     def set_skill(self, skill_idx):
         """Helper to change the active skill"""
         self.current_skill = torch.zeros(1, self.skill_dim).to(self.device)
         self.current_skill[0, skill_idx % self.skill_dim] = 1.0
 
+    def sample_skill(self, rng: np.random.Generator) -> np.ndarray:
+        """Return a skill vector (always dimension = skill_dim)."""
+        idx = rng.integers(0, self.skill_dim)
+        z = np.zeros(self.skill_dim, dtype=np.float32)
+        z[idx] = 1.0
+        return z
+
+    def preprocess_observation(self, raw_obs) -> np.ndarray:
+        """Convert raw env obs into the model's required input vector."""
+        return raw_obs
+
+    def process_obs(self, obs, env=None):
+        """
+        Process observation to return a flat numpy array (compatible with MetaControllerEnv).
+        """
+        if isinstance(obs, dict):
+            img = obs.get('image', obs.get('visual')) 
+        else:
+            img = obs
+            
+        if img is None:
+            # Fallback if no image found (e.g. flat obs already?)
+            return np.zeros(147, dtype=np.float32)
+
+        return img.flatten().astype(np.float32)
+
+    def load_model(self, checkpoint_path: str):
+        pass
+
     # --- ROBUST GET_ACTION ---
-    def get_action(self, obs, deterministic=True):
+    def get_action(
+        self,
+        obs, 
+        skill_vec: np.ndarray = None,
+        deterministic: bool = True
+    ):
+        if skill_vec is not None:
+             skill_tensor = torch.tensor(skill_vec, dtype=torch.float32).to(self.device).unsqueeze(0)
+        else:
+             skill_tensor = self.current_skill
+
         # 1. Handle Dictionary Observations (Standard Minigrid)
         if isinstance(obs, dict):
             img = obs.get('image')
             if img is None:
-                img = obs.get('visual') # Some wrappers use 'visual'
+                img = obs.get('visual')
             state = obs.get('state', torch.zeros(1, 3).to(self.device))
             
         # 2. Handle Array Observations (Wrapped/Raw Image)
         else:
-            # Assume 'obs' IS the image if it's not a dict
             img = obs
             state = torch.zeros(1, 3).to(self.device)
 
-        # 3. Convert to Tensor if needed
+        # 3. Convert to Tensor
         if not torch.is_tensor(img):
             img = torch.tensor(img, dtype=torch.float32).to(self.device)
         if not torch.is_tensor(state):
             state = torch.tensor(state, dtype=torch.float32).to(self.device)
 
-        # 4. Handle Dimensions (Batch & Permute)
+        # 4. Handle Dimensions
         if img.ndim == 3: 
-            img = img.unsqueeze(0) # Add batch dim (B, H, W, C)
+            img = img.unsqueeze(0)
         
         if state.ndim == 1: 
             state = state.unsqueeze(0)
         
-        # Permute (B, H, W, C) -> (B, C, H, W) for PyTorch Conv2d
+        # Permute (B, H, W, C) -> (B, C, H, W)
         if img.shape[-1] == 3: 
             img = img.permute(0, 3, 1, 2)
 
         with torch.no_grad():
-            action, _, _, _ = self.model.get_action_and_value(img, state, self.current_skill)
+            action, _, _, _ = self.model.get_action_and_value(img, state, skill_tensor)
             
-        return action.cpu().numpy()
+        return action.item()

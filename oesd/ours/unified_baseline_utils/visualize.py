@@ -115,9 +115,14 @@ def unified_position_fn(env, obs, info):
     """
 
     # Case 1 — environments with actual agent_pos (MiniGrid)
-    if hasattr(env, "agent_pos"):
+    # Check direct or unwrapped
+    target_env = env
+    if hasattr(env, "unwrapped"):
+        target_env = env.unwrapped
+        
+    if hasattr(target_env, "agent_pos"):
         try:
-            pos = np.array(env.agent_pos, dtype=np.float32)
+            pos = np.array(target_env.agent_pos, dtype=np.float32)
             if pos.shape == (2,):
                 return pos
         except:
@@ -176,7 +181,7 @@ parser.add_argument("--deterministic", type=bool, default=False)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--render_mode", type=str, default="rgb_array")
 parser.add_argument("--skill_idx", type=int, default=0)
-parser.add_argument("--config", type=str, default="configs/config1.py")
+parser.add_argument("--config", type=str, default="oesd/ours/configs/config1.py")
 parser.add_argument("--skill_count", type=int, default=8)
 parser.add_argument("--checkpoint_path", type=str, default=None, help="Override checkpoint path from config")
 
@@ -194,11 +199,30 @@ def main(_A: argparse.Namespace):
         for model_cfg in config.model_cfgs:
             model_cfg.checkpoint_path = _A.checkpoint_path
 
-    # 2. Override Skill Dimension (THIS IS THE FIX)
-    if _A.skill_count and hasattr(config, 'model_cfgs'):
+    # 2. Override Checkpoint Path
+    if _A.checkpoint_path and hasattr(config, 'model_cfgs'):
         for model_cfg in config.model_cfgs:
-            # Force the model config to use the CLI skill count
-            model_cfg.skill_dim = _A.skill_count
+            model_cfg.checkpoint_path = _A.checkpoint_path
+
+    # 2.5 Filter for the requested algorithm
+    filtered_cfgs = [m for m in config.model_cfgs if m.algo_name == _A.algo_name]
+    if not filtered_cfgs:
+        print(f"[Visualizer] Warning: Algo '{_A.algo_name}' not found in config. Using all...")
+    else:
+        config.model_cfgs = filtered_cfgs
+
+    # 3. Apply DIAYN Wrapper if needed (CRITICAL FIX)
+    if _A.algo_name == "DIAYN":
+        print("[Visualizer] Enabling HybridObservationWrapper for DIAYN compatibility.")
+        from oesd.baselines.dyan.wrappers import HybridObservationWrapper
+        
+        # We wrap the factory so every new env gets wrapped
+        original_factory = env_factory
+        def wrapped_factory():
+            env = original_factory()
+            return HybridObservationWrapper(env)
+        
+        env_factory = wrapped_factory
 
     # build visualizer config
     vis_cfg = VisualizerConfig(
@@ -213,6 +237,12 @@ def main(_A: argparse.Namespace):
     )
     # construct  SingleVisualizer 
     visualizer = SingleVisualizer(vis_cfg)
+
+    # Apply selected skill to all models
+    print(f"[Visualizer] Setting active skill to {_A.skill_idx}")
+    for model in visualizer.model_interfaces:
+        if hasattr(model, "set_skill"):
+            model.set_skill(_A.skill_idx)
 
     # visualizer.update_relative_motion = update_relative_motion
 

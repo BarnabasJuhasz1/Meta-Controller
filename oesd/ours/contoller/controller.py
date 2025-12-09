@@ -2,12 +2,15 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback
 
 from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 from oesd.ours.contoller.meta_env_wrapper import MetaControllerEnv
 from oesd.ours.unified_baseline_utils.SingleLoader import load_model_from_config, load_config
 
 import argparse
+import os
+
 import os
 
 
@@ -68,8 +71,18 @@ def main(_A: argparse.Namespace):
     # load models via adapters (while feeding skill_registry to adapters)
     adapters = [load_model_from_config(m, skill_registry=skill_registry) for m in config.model_cfgs]
     model_interfaces = {adapter.algo_name: adapter for adapter in adapters}
+    adapters = [load_model_from_config(m, skill_registry=skill_registry) for m in config.model_cfgs]
+    model_interfaces = {adapter.algo_name: adapter for adapter in adapters}
 
     # initialize environment
+    meta_env = MetaControllerEnv(skill_registry,
+                                model_interfaces,
+                                env_name=_A.env_name,
+                                skill_duration=_A.skill_duration,
+                                render_mode=_A.render_mode,
+                                key_pickup_reward=_A.key_pickup_reward,
+                                door_open_reward=_A.door_open_reward,
+                                key_drop_reward=_A.key_drop_reward)
     meta_env = MetaControllerEnv(skill_registry,
                                 model_interfaces,
                                 env_name=_A.env_name,
@@ -84,6 +97,7 @@ def main(_A: argparse.Namespace):
 
     from stable_baselines3.common.env_checker import check_env
     # to make sure our meta environment is in the format stable baselines expects
+    # to make sure our meta environment is in the format stable baselines expects
     check_env(meta_env)
 
     # vectorize environment for PPO efficiency
@@ -92,7 +106,15 @@ def main(_A: argparse.Namespace):
     # initialize model
     model = PPO(
         "MlpPolicy", # Use CNN if input is pixels (MiniGrid), "MlpPolicy" if flat
+        "MlpPolicy", # Use CNN if input is pixels (MiniGrid), "MlpPolicy" if flat
         vec_env,
+        learning_rate=_A.learning_rate,
+        n_steps=_A.n_steps,
+        batch_size=_A.batch_size,
+        gamma=_A.gamma,       
+        verbose=_A.verbose,
+        tensorboard_log=_A.tensorboard_log,
+        device = _A.device
         learning_rate=_A.learning_rate,
         n_steps=_A.n_steps,
         batch_size=_A.batch_size,
@@ -104,6 +126,16 @@ def main(_A: argparse.Namespace):
 
     # train model
     print("Starting training of Meta-Controller...")
+
+    checkpoint_callback = CheckpointCallback(
+        save_freq=_A.checkpoint_freq * _A.n_steps,
+        save_path=os.path.join(_A.save_path, "checkpoints"),
+        name_prefix="rl_model",
+        save_replay_buffer=True,
+        save_vecnormalize=True,
+    )
+    
+    model.learn(total_timesteps=_A.num_timesteps, callback=checkpoint_callback)
 
     checkpoint_callback = CheckpointCallback(
         save_freq=_A.checkpoint_freq * _A.n_steps,
