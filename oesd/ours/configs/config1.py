@@ -5,6 +5,13 @@ VIS_PATH = "oesd/visualizations/"
 CHECKPOINT_PATH = "checkpoints/"
 
 SKILL_DIM = 8
+ACTION_DIM = 6
+# self._env.actions.forward,
+# self._env.actions.left,
+# self._env.actions.right,
+# self._env.actions.pickup,
+# self._env.actions.drop,
+# self._env.actions.toggle,
 
 model_cfgs = []
 
@@ -16,13 +23,34 @@ model_cfgs.append(ModelConfig(
      adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
 ))
 
-# PATH = "/home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/oesd/baselines/RSD/exp/RSD_small_exp/mini_4d_3P_img_dir_carry_original_Csd042_1764514102_minigrid_small_RSD/option_policy175.pt"
-# model_cfgs.append(ModelConfig(
-#     algo_name="RSD",
-#     #checkpoint_path=os.path.join(CHECKPOINT_PATH, "RSD/4D_3P_img_dir_carry_orig_C/itr_175.pkl"),
-#     checkpoint_path=PATH,
-#     action_dim=None,
-#     skill_dim=SKILL_DIM,
-#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "RSD")},
-# ))
+model_cfgs.append(ModelConfig(
+    algo_name="LSD",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/lsd_latest.pth"),
+    action_dim=ACTION_DIM,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
+))
 
+model_cfgs.append(ModelConfig(
+    algo_name="DIAYN",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DIAYN/diayn_doorkey.pth"),
+    action_dim=ACTION_DIM,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DIAYN")},
+))
+
+model_cfgs.append(ModelConfig(
+    algo_name="DADS",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DADS/dads_doorkey.pth"),
+    action_dim=ACTION_DIM,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DADS")},
+))
+
+# model_cfgs.append(ModelConfig(
+#     algo_name="METRA",
+#     checkpoint_path=os.path.join(CHECKPOINT_PATH, "METRA/"),
+#     action_dim=7,
+#     skill_dim=SKILL_DIM,
+#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "METRA")},
+# ))

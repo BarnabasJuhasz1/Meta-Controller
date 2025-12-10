@@ -8,9 +8,12 @@ import torch
 import os
 import importlib
 
+from oesd.ours.unified_baseline_utils.adapters.diayn_adapter import DIAYNAdapter
 from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 from oesd.ours.unified_baseline_utils.adapters.LSD_adapter import LSDAdapter
 from oesd.ours.unified_baseline_utils.adapters.RSD_adapter import RSDAdapter
+from oesd.ours.unified_baseline_utils.adapters.metra_adapter import MetraAdapter
+from oesd.ours.unified_baseline_utils.adapters.dads_adapter import DadsAdapter
 from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 
 # ============================================================================
@@ -56,15 +59,39 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
             skill_registry=skill_registry
         )
         return adapter
+ 
+    elif "diayn" in algo_name:        
+        adapter = DIAYNAdapter(
+            algo_name=algo_name,
+            ckpt_path=cfg.checkpoint_path,
+            action_dim=cfg.action_dim,
+            skill_dim=cfg.skill_dim,
+            save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
+            skill_registry=skill_registry,
+        )
+        return adapter
     
     elif algo_name == "dads":
-        pass
+        adapter = DadsAdapter(
+            algo_name=algo_name,
+            ckpt_path=cfg.checkpoint_path,
+            action_dim=cfg.action_dim,
+            skill_dim=cfg.skill_dim,
+            save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
+            skill_registry=skill_registry,
+        )
+        return adapter
     elif algo_name == "metra":
-        pass
-    elif algo_name == "dyan":
-        pass
-
-
+        adapter = MetraAdapter(
+            algo_name=algo_name,
+            ckpt_path=cfg.checkpoint_path,
+            action_dim=cfg.action_dim,
+            skill_dim=cfg.skill_dim,
+            save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
+            skill_registry=skill_registry,
+        )
+        return adapter
+    
 
     # ------------------------------------------------------------
     # ADD FUTURE ALGORITHMS HERE
@@ -111,4 +138,5 @@ def load_config(config_path: str):
     # Create the module object and execute it
     config_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(config_module)
+    
     return config_module

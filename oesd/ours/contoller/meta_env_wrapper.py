@@ -6,6 +6,8 @@ from gymnasium import spaces
 import akro
 import matplotlib.pyplot as plt
 import random
+import torch
+import torch
 
 from minigrid.minigrid_env import MiniGridEnv
 from minigrid.core.mission import MissionSpace
@@ -24,7 +26,7 @@ class MetaControllerEnv(gym.Env):
         max_steps=None,
         action_scale=1.0,
         render_mode="rgb_array",
-        
+        **kwargs
     ):
         super().__init__()
         if env_name == "minigrid":
@@ -37,24 +39,108 @@ class MetaControllerEnv(gym.Env):
         self._max_steps = max_steps or self._env.max_steps
         self._action_scale = action_scale
         self.model_interfaces = model_interfaces
+        
+        # Reward shaping parameters
+        self.key_pickup_reward = kwargs.get("key_pickup_reward", 0.0)
+        self.door_open_reward = kwargs.get("door_open_reward", 0.0)
+        self.key_drop_reward = kwargs.get("key_drop_reward", 0.0)
+        
+        # Visualization tracking
+        self.current_algo = "None"
+        self.current_global_skill = -1
+        self.current_local_skill = -1
+        self.current_step_in_skill = 0
+        self.render_mode = render_mode
 
-        # Action Space: Select one of the frozen skills
-        # self.action_space = spaces.Discrete(self.registry.num_actions)
-        self._discrete_actions = [
-            self._env.actions.forward,
-            self._env.actions.left,
-            self._env.actions.right,
-            self._env.actions.pickup,
-            self._env.actions.drop,
-            self._env.actions.toggle,
-        ]
-        self._num_actions = len(self._discrete_actions)
-        self.action_space = spaces.Box(
-            low=-action_scale,
-            high=action_scale,
-            shape=(self._num_actions,),
-            dtype=np.float32,
-        )
+        # self._discrete_actions = [
+        #     self._env.actions.forward,
+        #     self._env.actions.left,
+        #     self._env.actions.right,
+        #     self._env.actions.pickup,
+        #     self._env.actions.drop,
+        #     self._env.actions.toggle,
+        # ]
+        # self._num_actions = len(self._discrete_actions)
+        # self.action_space = spaces.Box(
+        #     low=-action_scale,
+        #     high=action_scale,
+        #     shape=(self._num_actions,),
+        #     dtype=np.float32,
+        # )
+
+        base_env = self._env.unwrapped  # accessing the core environment behind all wrappers
+
+        # Try printing these common attributes to see which one exists:
+        # try:
+        #     print(f"Grid Size: {base_env.width} x {base_env.height}") # Common in MiniGrid
+        # except AttributeError:
+        #     pass
+
+        # try:
+        #     print(f"Grid Shape: {base_env.grid_size}") # Common in some custom envs
+        # except AttributeError:
+        #     pass
+
+        # try:
+        #     print(f"Arena Size: {base_env.arena.width} x {base_env.arena.height}") # Common in continuous envs
+        # except AttributeError:
+        #     pass
+
+
+
+
+        self.action_space = spaces.Discrete(len(self.registry.bag_of_skills))
+        
+        # Reward shaping parameters
+        self.key_pickup_reward = kwargs.get("key_pickup_reward", 0.0)
+        self.door_open_reward = kwargs.get("door_open_reward", 0.0)
+        self.key_drop_reward = kwargs.get("key_drop_reward", 0.0)
+        
+        # Visualization tracking
+        self.current_algo = "None"
+        self.current_global_skill = -1
+        self.current_local_skill = -1
+        self.current_step_in_skill = 0
+        self.render_mode = render_mode
+
+        # self._discrete_actions = [
+        #     self._env.actions.forward,
+        #     self._env.actions.left,
+        #     self._env.actions.right,
+        #     self._env.actions.pickup,
+        #     self._env.actions.drop,
+        #     self._env.actions.toggle,
+        # ]
+        # self._num_actions = len(self._discrete_actions)
+        # self.action_space = spaces.Box(
+        #     low=-action_scale,
+        #     high=action_scale,
+        #     shape=(self._num_actions,),
+        #     dtype=np.float32,
+        # )
+
+        base_env = self._env.unwrapped  # accessing the core environment behind all wrappers
+
+        # Try printing these common attributes to see which one exists:
+        # try:
+        #     print(f"Grid Size: {base_env.width} x {base_env.height}") # Common in MiniGrid
+        # except AttributeError:
+        #     pass
+
+        # try:
+        #     print(f"Grid Shape: {base_env.grid_size}") # Common in some custom envs
+        # except AttributeError:
+        #     pass
+
+        # try:
+        #     print(f"Arena Size: {base_env.arena.width} x {base_env.arena.height}") # Common in continuous envs
+        # except AttributeError:
+        #     pass
+
+
+
+
+        self.action_space = spaces.Discrete(len(self.registry.bag_of_skills))
 
         self.env_name = env_name
 
@@ -65,9 +151,11 @@ class MetaControllerEnv(gym.Env):
             initial_obs = reset_result
         sample_obs = self._process_obs(initial_obs)
         self.observation_space = spaces.Box(
-            low=0.0,
-            high=1.0,
-            shape=sample_obs.shape,
+            # low=0.0,
+            # high=1.0,
+            low = -np.inf,
+            high= np.inf,
+            shape=sample_obs.shape, # this should be the largest obs shape of all algorithms
             dtype=np.float32,
         )
         self._last_obs = sample_obs
@@ -81,49 +169,63 @@ class MetaControllerEnv(gym.Env):
             obs, _ = result
         else:
             obs = result
-        self._last_obs = self._process_obs(obs)
+        self._last_raw_obs = obs
+        
+        # Reset reward flags
+        self._rewarded_key = False
+        self._rewarded_door = False
+        
+        # Reset tracking
+        self.current_algo = "None"
+        self.current_global_skill = -1
+        self.current_local_skill = -1
+        self.current_step_in_skill = 0
+        
+        self._last_raw_obs = obs
+        
+        # Reset reward flags
+        self._rewarded_key = False
+        self._rewarded_door = False
+        
+        # Reset tracking
+        self.current_algo = "None"
+        self.current_global_skill = -1
+        self.current_local_skill = -1
+        self.current_step_in_skill = 0
+        
         info = {}
-        return self._last_obs, info
+        return self._process_obs(obs), info
 
     def _map_action(self, action):
+        if isinstance(action, int):
+            return action
+        if isinstance(action, int):
+            return action
         if action.ndim == 0:
             return int(action)
         return int(np.argmax(action))
 
+
     def _process_obs(self, obs):
-        if isinstance(obs, tuple):
-            obs = obs[0]
+        """
+            just a process observation wrapper,
+            each algorithm implements its own expected way of processing observations
+            
+        """
         
-        # 1. Flatten and normalize image
-        image = obs["image"].astype(np.float32) / 255.0
-        
-        # 2. Normalize direction (0-3 becomes 0.0-1.0)
-        direction = np.array([obs["direction"] / 3.0], dtype=np.float32)
+        if self.current_algo == "None":
+            # return self._process_obs_for_meta_controller(obs)
+            return self.model_interfaces['rsd'].process_obs(obs, self._env)
 
-        # 3. Add Carrying (Binary)
-        # Accessing .unwrapped is safer in case of other wrappers
-        # env_base = self.env.unwrapped 
-        carrying_val = 1.0 if self._env.carrying is not None else 0.0
-        carrying = np.array([carrying_val], dtype=np.float32)
+        processed_obs = self.model_interfaces[self.current_algo].process_obs(obs, self._env)
 
-        # 4. Add Agent Position (Normalized)
-        # We divide by width/height to keep inputs within [0, 1] range
-        agent_x = self._env.agent_pos[0] / self._env.width
-        agent_y = self._env.agent_pos[1] / self._env.height
-        position = np.array([agent_x, agent_y], dtype=np.float32)
+        # returned SHAPE should always be (149,)
+        current_size = processed_obs.shape[0]
+        padding = np.zeros(149-current_size, dtype=np.float32)
+        return np.concatenate((processed_obs, padding))
 
-        # debug print
-        # if carrying_val > 0:
-        #     print(f"AGENT CARRYING at {self._env.agent_pos}")
-        
-        # Concatenate everything: [Image flat, Direction, Carrying, PosX, PosY]
-        return np.concatenate([
-            image.flatten(), 
-            direction, 
-            carrying, 
-            # position
-        ], axis=0)
-
+    def _process_obs_for_meta_controller(self, obs):
+        pass
 
     def step(self, global_skill_idx, render=False):
         """
@@ -133,49 +235,143 @@ class MetaControllerEnv(gym.Env):
         terminated = False
         truncated = False
 
-        print("STEP CALLED WITH SKILL INDEX: {}".format(global_skill_idx))
-
         # 1. DECODE: Retrieve the specific model and z vector
         # This handles the "Selection of skill & model" automatically
         algo_name, z_vector = self.registry.get_algo_and_skill_from_skill_idx(global_skill_idx)
+        
+        # Update tracking info
+        self.current_algo = algo_name
+        self.current_global_skill = global_skill_idx
+        # Calculate local skill index: global_idx % skills_per_algo
+        # Assuming skills are registered in blocks of equal size per algo as per registry implementation
+        self.current_local_skill = global_skill_idx % self.registry.skill_count_per_algo
+        self.current_step_in_skill = 0
 
         # --- The Scheduler Loop  ---
-        for _ in range(self.skill_duration):
+        for step_i in range(self.skill_duration):
+            self.current_step_in_skill = step_i + 1
+            
             # 1. Get current observation from environment
             # Note: We need the LAST observation to query the policy
             # (In a real implementation, cache 'obs' from the loop start)
-            current_obs = self._process_obs(self.last_obs)
+            current_obs = self._process_obs(self._last_raw_obs)
 
             # 2. Ask the specific sub-skill for a primitive action
             # We use the current observation (self.last_obs) 
             # primitive_action = self.registry.get_action(action, self.last_obs)
             with torch.no_grad():
-                primitive_action = self.model_interfaces[algo_name].get_action(current_obs, z_vector)
+                if self.current_algo == "diayn":
+                    primitive_action = self.model_interfaces[self.current_algo].get_action(self._last_raw_obs, z_vector)
+                else:
+                    primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
             
+            # Update title before step if human rendering, because minigrid might render in step
+            if self.render_mode == "human":
+                self._update_window_title()
+
             # 3. Step the physical environment
-            obs, reward, terminated, truncated, info = self._env.step(primitive_action)
             
+            # Check if we are carrying a key BEFORE the step
+            was_carrying_key = isinstance(self._env.carrying, Key)
+            
+            mapped_action = self._map_action(primitive_action)
+            obs, reward, terminated, truncated, info = self._env.step(mapped_action)
+            
+            # Check if we are carrying a key AFTER the step
+            is_carrying_key = isinstance(self._env.carrying, Key)
+
+            # If we were carrying a key, and now we are not, AND the action was DROP
+            # then we apply the penalty (reward is usually negative)
+            if was_carrying_key and not is_carrying_key:
+                if mapped_action == self._env.actions.drop:
+                    reward += self.key_drop_reward
+                    # print(f"KEY DROPPED! Penalty applied: {self.key_drop_reward}")
+
             if render:
-                frame = self._env.render()
+                # Use our custom render to update title
+                frame = self.render()
                 if frame is not None:
                     info['render'] = frame.transpose(2, 0, 1)
 
-            self.last_obs = obs # Update for next micro-step
+            self._last_raw_obs = obs # Update for next micro-step
             
+            # --- Reward Shaping ---
+            # Check for Key Pickup
+            if not self._rewarded_key and self._env.carrying is not None:
+                if isinstance(self._env.carrying, Key):
+                    reward += self.key_pickup_reward
+                    self._rewarded_key = True
+            
+            # Check for Door Opening
+            if not self._rewarded_door:
+                # Find the door in the grid
+                # Note: This iterates over the grid, which is small (8x8), so it's cheap.
+                # If performance is critical, we could cache the door object or position.
+                for obj in self._env.grid.grid:
+                    if isinstance(obj, Door) and obj.is_open:
+                        reward += self.door_open_reward
+                        self._rewarded_door = True
+                        break
+
             total_reward += reward
             
             # If the task is solved or failed during the skill, stop early
             if terminated or truncated:
                 break
-                
+            
+            
         # Return the aggregated experience to the Meta-Controller
-        return obs, total_reward, terminated, truncated, info
+        return self._process_obs(self._last_raw_obs), total_reward, terminated, truncated, info
 
     # Helper to capture the obs for the registry
     # def reset(self, **kwargs):
     #     obs, info = self._env.reset(**kwargs)
     #     self.last_obs = obs
     #     return obs, info
+
+    def _update_window_title(self):
+        """Helper to update the window title with current skill info."""
+        if self.render_mode == "human":
+            title = f"Algo: {self.current_algo} | Global Skill: {self.current_global_skill} | Local Skill: {self.current_local_skill} | Step: {self.current_step_in_skill}/{self.skill_duration}"
+            
+            # Try PyGame (Minigrid uses PyGame)
+            try:
+                import pygame
+                pygame.display.set_caption(title)
+            except ImportError:
+                pass
+            except Exception:
+                pass
+                
+            # Try Matplotlib (fallback)
+            try:
+                if hasattr(self._env, 'window') and self._env.window is not None:
+                     # Minigrid's Window class might expose the underlying backend
+                     pass
+            except Exception:
+                pass
+
+    def _update_window_title(self):
+        """Helper to update the window title with current skill info."""
+        if self.render_mode == "human":
+            title = f"Algo: {self.current_algo} | Global Skill: {self.current_global_skill} | Local Skill: {self.current_local_skill} | Step: {self.current_step_in_skill}/{self.skill_duration}"
+            
+            # Try PyGame (Minigrid uses PyGame)
+            try:
+                import pygame
+                pygame.display.set_caption(title)
+            except ImportError:
+                pass
+            except Exception:
+                pass
+                
+            # Try Matplotlib (fallback)
+            try:
+                if hasattr(self._env, 'window') and self._env.window is not None:
+                     # Minigrid's Window class might expose the underlying backend
+                     pass
+            except Exception:
+                pass
 
     def render(self, mode="rgb_array", **kwargs):
         # --- FIX START: Robust Render ---
@@ -191,6 +387,13 @@ class MetaControllerEnv(gym.Env):
             elif hasattr(self._env.unwrapped, 'get_frame'):
                 frame = self._env.unwrapped.get_frame(highlight=False, tile_size=32)
         
+        # Update Window Title if in human mode
+        self._update_window_title()
+
+        
+        # Update Window Title if in human mode
+        self._update_window_title()
+
         return frame
 
     def render_trajectories(self, trajectories, colors, plot_axis, ax):

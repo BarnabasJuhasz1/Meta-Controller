@@ -27,9 +27,7 @@ class LSDAdapter(BaseAdapter):
         self.trainer = LSDTrainer(cfg)
         self.trainer.load(ckpt_path)
 
-        self.action_dim = action_dim
         self.skill_dim = self.trainer.cfg.skill_dim
-        self.save_dir = save_dir
 
         # Convert discrete skill vectors to numpy for skill registry
         # discrete_Z is shape (num_skills, skill_dim)
@@ -43,6 +41,7 @@ class LSDAdapter(BaseAdapter):
         self.current_skill_idx = 0
         self.current_skill_vec = self.trainer.discrete_Z[self.current_skill_idx]
 
+
     def set_skill(self, idx: int):
         self.current_skill_idx = int(idx)
         self.current_skill_vec = self.trainer.discrete_Z[idx]
@@ -55,13 +54,19 @@ class LSDAdapter(BaseAdapter):
         skill_vec = self.skill_registry.sample(self.algo_name)
         return skill_vec
 
-    def get_action(self, obs, deterministic=False, skill_z=None):
+    
+    def get_action(self, obs, skill_z, deterministic=False):
         """
         Unified action interface:
         obs -> tensor -> pass through LSD policy -> primitive action
         
         If skill_z is provided, use it; otherwise use current_skill_vec.
+
+        Expects obs to be processed observation, but can be any shape of (X,)!
         """
+        # CUT THE OBS TO THE SHAPE OF (147,) AS LSD EXPECTS IT
+        obs = obs[:147]
+
         if skill_z is not None:
             # Convert to tensor if needed
             if isinstance(skill_z, np.ndarray):
@@ -71,8 +76,8 @@ class LSDAdapter(BaseAdapter):
         else:
             z_tensor = self.current_skill_vec
 
-        ovec = self.trainer._obs_to_vec(obs)
-        o = self.trainer._obs_to_tensor(ovec)
+        # ovec = self.trainer._obs_to_vec(obs)
+        o = self.trainer._obs_to_tensor(obs)
 
         z = z_tensor.unsqueeze(0) if z_tensor.dim() == 1 else z_tensor
         logits, _ = self.trainer.policy(o, z)
@@ -85,3 +90,8 @@ class LSDAdapter(BaseAdapter):
             act = dist.sample()
 
         return int(act.item())
+
+    def process_obs(self, obs, env):
+        return self.trainer._obs_to_vec(obs)
+
+        # returned SHAPE: (147,)

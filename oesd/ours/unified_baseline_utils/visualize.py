@@ -115,9 +115,14 @@ def unified_position_fn(env, obs, info):
     """
 
     # Case 1 — environments with actual agent_pos (MiniGrid)
-    if hasattr(env, "agent_pos"):
+    # Check direct or unwrapped
+    target_env = env
+    if hasattr(env, "unwrapped"):
+        target_env = env.unwrapped
+        
+    if hasattr(target_env, "agent_pos"):
         try:
-            pos = np.array(env.agent_pos, dtype=np.float32)
+            pos = np.array(target_env.agent_pos, dtype=np.float32)
             if pos.shape == (2,):
                 return pos
         except:
@@ -168,7 +173,7 @@ def unified_position_fn(env, obs, info):
 
 parser = argparse.ArgumentParser(description="Unified Baseline Utils")
 # parser.add_argument("--mode", type=str, default="visualize", choices=["train", "visualize"])
-parser.add_argument("--algo_name", type=str, default="RSD", choices=["LSD", "RSD"])
+parser.add_argument("--algo_name", type=str, default="RSD", choices=["LSD", "RSD", "DIAYN"])
 parser.add_argument("--env_name", type=str, default="minigrid")
 parser.add_argument("--horizon", type=int, default=200)
 parser.add_argument("--episodes", type=int, default=3)
@@ -176,11 +181,12 @@ parser.add_argument("--deterministic", type=bool, default=False)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--render_mode", type=str, default="rgb_array")
 parser.add_argument("--skill_idx", type=int, default=0)
-parser.add_argument("--config", type=str, default="configs/config1.py")
+parser.add_argument("--config", type=str, default="oesd/ours/configs/config1.py")
 parser.add_argument("--skill_count", type=int, default=8)
 parser.add_argument("--skill_sets", action="append", type=str, default=None,
                 help="Repeatable. Comma-separated skill indices for a model.\n"
                     "Example: --skill_sets 0,1 --skill_sets 2  (two models: first shows skills [0,1], second [2])")
+parser.add_argument("--checkpoint_path", type=str, default=None, help="Override checkpoint path from config")
 
 
 def main(_A: argparse.Namespace):
@@ -190,6 +196,36 @@ def main(_A: argparse.Namespace):
 
     # load model configs from config file
     config = load_config(_A.config)
+
+    # 1. Override Checkpoint Path
+    if _A.checkpoint_path and hasattr(config, 'model_cfgs'):
+        for model_cfg in config.model_cfgs:
+            model_cfg.checkpoint_path = _A.checkpoint_path
+
+    # 2. Override Checkpoint Path
+    if _A.checkpoint_path and hasattr(config, 'model_cfgs'):
+        for model_cfg in config.model_cfgs:
+            model_cfg.checkpoint_path = _A.checkpoint_path
+
+    # 2.5 Filter for the requested algorithm
+    filtered_cfgs = [m for m in config.model_cfgs if m.algo_name == _A.algo_name]
+    if not filtered_cfgs:
+        print(f"[Visualizer] Warning: Algo '{_A.algo_name}' not found in config. Using all...")
+    else:
+        config.model_cfgs = filtered_cfgs
+
+    # 3. Apply DIAYN Wrapper if needed (CRITICAL FIX)
+    if _A.algo_name == "DIAYN":
+        print("[Visualizer] Enabling HybridObservationWrapper for DIAYN compatibility.")
+        from oesd.baselines.dyan.wrappers import HybridObservationWrapper
+        
+        # We wrap the factory so every new env gets wrapped
+        original_factory = env_factory
+        def wrapped_factory():
+            env = original_factory()
+            return HybridObservationWrapper(env)
+        
+        env_factory = wrapped_factory
 
     # build visualizer config
     vis_cfg = VisualizerConfig(
@@ -206,10 +242,16 @@ def main(_A: argparse.Namespace):
     # construct  SingleVisualizer 
     visualizer = SingleVisualizer(vis_cfg)
 
+    # Apply selected skill to all models
+    print(f"[Visualizer] Setting active skill to {_A.skill_idx}")
+    for model in visualizer.model_interfaces:
+        if hasattr(model, "set_skill"):
+            model.set_skill(_A.skill_idx)
+
     # visualizer.update_relative_motion = update_relative_motion
 
-    # sample and plot
     trajectories = visualizer.sample_trajectories()
+
     visualizer.plot_trajectories(trajectories)
 
     print("\nVisualization complete.\n")

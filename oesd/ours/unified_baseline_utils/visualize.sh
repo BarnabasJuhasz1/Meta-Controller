@@ -7,7 +7,7 @@ python ours/unified_baseline_utils/visualize.py \
     --env_name minigrid \
     --algo_name RSD \
     --skill_idx 0 \
-    --config ours/unified_baseline_utils/configs/config1.py \
+    --config ours/configs/config1.py \
     --horizon 100 \
     --episodes 1 \
     --deterministic False \

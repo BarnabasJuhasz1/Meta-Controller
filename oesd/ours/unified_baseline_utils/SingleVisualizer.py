@@ -1,6 +1,7 @@
 # SingleVisualizer.py
 
 from __future__ import annotations
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -108,7 +109,8 @@ class SingleVisualizer:
         results = {}
 
         for mconfig, model in zip(self.models, self.model_interfaces):
-            name = getattr(mconfig, "algo", None) or getattr(mconfig, "algo_name", None) or "model"
+            name = mconfig.algo_name
+            results[name] = []
             print(f"[Visualizer] Sampling {self.num_episodes} episodes for {name}...")
 
             # determine which skill indices to visualize for this model
@@ -216,8 +218,7 @@ class SingleVisualizer:
 
         colors = {}
         for i, mconfig in enumerate(self.models):
-            key = getattr(mconfig, "algo", None) or getattr(mconfig, "algo_name", None) or f"model{i}"
-            colors[key] = base_colors[i % len(base_colors)]
+            colors[mconfig.algo_name] = base_colors[i % len(base_colors)]
 
         # ------------------------------------------------------------------
         # 3. Overlay all trajectories
@@ -264,7 +265,7 @@ class SingleVisualizer:
         ax.grid(False)
 
         if len(self.models) == 1:
-            ax.set_title(self.models[0].algo.upper(), fontsize=16)
+            ax.set_title(self.models[0].algo_name.upper(), fontsize=16)
         else:
             ax.set_title("Trajectory Overlay", fontsize=16)
 

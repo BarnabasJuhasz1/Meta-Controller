@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from models import HybridEncoder, Policy, Discriminator
+from models import HybridEncoder, Agent, Discriminator
 
 class DIAYNAgent:
     def __init__(self, env, config):
@@ -21,7 +21,7 @@ class DIAYNAgent:
         
         # Models
         self.encoder = HybridEncoder(self.action_dim).to(self.device)
-        self.policy = Policy(256, self.skill_dim, self.action_dim).to(self.device)
+        self.policy = Agent(256, self.skill_dim, self.action_dim).to(self.device)
         self.discriminator = Discriminator(self.skill_dim).to(self.device)
         
         # Optimizers
@@ -38,6 +38,7 @@ class DIAYNAgent:
         self.entropy_coef = config['agent']['entropy_coef']
         self.clip_eps = config['agent']['clip_eps']
         self.update_epochs = config['agent']['update_epochs']
+        self.config = config
 
     def get_action(self, obs, skill_vec, deterministic=False):
         img = torch.FloatTensor(obs['image']).unsqueeze(0).to(self.device)
@@ -130,7 +131,9 @@ class DIAYNAgent:
         torch.save({
             'encoder': self.encoder.state_dict(),
             'policy': self.policy.state_dict(),
-            'discriminator': self.discriminator.state_dict()
+            'discriminator': self.discriminator.state_dict(),
+            'skill_dim': self.skill_dim,
+            'config': self.config if hasattr(self, 'config') else None
         }, path)
 
     def load(self, path):
