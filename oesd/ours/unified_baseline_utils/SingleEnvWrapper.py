@@ -6,11 +6,14 @@ import numpy as np
 import torch
 from collections import deque
 import random
-from enviroments.example_minigrid import SimpleEnv
+from oesd.ours.enviroments.example_minigrid import SimpleEnv
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import akro
+
+from oesd.baselines.metra.models import ModelManager
+from oesd.baselines.metra.metraDiscrete import DiscreteSkillMetra
 
 
 class SingleEnvWrapper:
@@ -411,3 +414,39 @@ class SingleEnvWrapperOld(gym.Wrapper):
         setattr(self.env, "_last_action", int(action))
 
         return obs, reward, terminated, truncated, info, action
+
+
+
+def main():
+
+    
+
+    if torch.cuda.is_available():
+        print("CUDA enabled")
+        device = torch.device("cuda")
+        print(torch.cuda.get_device_name(device))
+    else:
+        print("CUDA not available")
+        device = torch.device("cpu")
+
+    testing = True
+    
+ 
+    env = SimpleEnv()
+    wrapped = SingleEnvWrapper(env=env)
+    
+    
+    nSkills = 8  
+    
+    mM=ModelManager(phiNum=3,polNum=3)
+
+    metra = DiscreteSkillMetra(wrapped, mM ,n_skills=nSkills,lmbd=30.0, device=device)
+    
+
+    metra.train(num_epochs=200, steps_per_epoch=200, log_interval=100)
+
+
+    return
+
+if __name__ == "__main__":
+    main()
