@@ -33,15 +33,26 @@ from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 def collect_trajs(adapter, env_factory, skill_idx: int, episodes: int=8, horizon: int=200) -> List[np.ndarray]:
     trainer = getattr(adapter, 'trainer', None)
 
-    def extract_phi(obs):
+    def extract_phi(obs, env=None):
+        # Preferred: adapter exposes a get_phi method
         if hasattr(adapter, 'get_phi'):
             return np.array(adapter.get_phi(obs)).reshape(-1)
+
+        # Trainer-provided phi networks (LSD/METRA)
         if trainer is not None and hasattr(trainer, 'phi') and hasattr(trainer, '_obs_to_vec'):
             import torch
             with torch.no_grad():
                 ovec = trainer._obs_to_vec(obs)
                 o = trainer._obs_to_tensor(ovec)
                 return trainer.phi(o).detach().cpu().numpy().reshape(-1)
+
+        # Fallback: use adapter.process_obs(obs, env) if available (works for RSD adapter)
+        if hasattr(adapter, 'process_obs'):
+            try:
+                return np.array(adapter.process_obs(obs, env)).reshape(-1)
+            except Exception:
+                pass
+
         raise RuntimeError('No phi available')
 
     trajs = []
@@ -52,11 +63,49 @@ def collect_trajs(adapter, env_factory, skill_idx: int, episodes: int=8, horizon
         if hasattr(adapter, 'set_skill'):
             adapter.set_skill(skill_idx)
 
-        seq = [extract_phi(obs)]
+        seq = [extract_phi(obs, env)]
+        # Get the local skill vector to pass to adapters that require it (e.g., RSD)
+        try:
+            local_skills = adapter.skill_registry.get_skills_belonging_to_algo(adapter.algo_name)
+            skill_vec = local_skills[skill_idx]
+        except Exception:
+            skill_vec = None
+
+        # Prepare processed observation if adapter expects processed input
+        if hasattr(adapter, 'process_obs'):
+            proc_obs = adapter.process_obs(obs, env)
+        else:
+            proc_obs = obs
+
         for t in range(horizon):
-            act = adapter.get_action(obs, deterministic=True)
-            obs, reward, terminated, truncated, info = env.step(int(act))
-            seq.append(extract_phi(obs))
+            if skill_vec is not None:
+                act = adapter.get_action(proc_obs, skill_vec, deterministic=True)
+            else:
+                act = adapter.get_action(proc_obs, deterministic=True)
+
+            # Normalize action to a scalar int for env.step
+            act_arr = np.asarray(act).reshape(-1)
+            if act_arr.size == 0:
+                raise RuntimeError('Adapter returned empty action')
+
+            # If multi-dim output, prefer argmax (probabilities/logits), otherwise use rounded first element
+            if act_arr.size > 1:
+                # if looks like a probability vector, take argmax; else also take argmax for logits
+                chosen = int(np.argmax(act_arr))
+            else:
+                chosen = int(np.round(act_arr[0]))
+
+            # Clip to valid action range
+            chosen = int(np.clip(chosen, 0, adapter.action_dim - 1))
+
+            obs, reward, terminated, truncated, info = env.step(chosen)
+            seq.append(extract_phi(obs, env))
+
+            # update processed observation for next step
+            if hasattr(adapter, 'process_obs'):
+                proc_obs = adapter.process_obs(obs, env)
+            else:
+                proc_obs = obs
             if terminated or truncated:
                 break
 
@@ -194,7 +243,15 @@ def main():
     if args.skills:
         skill_indices = [int(s.strip()) for s in args.skills.split(',')]
     else:
-        skill_indices = list(range(adapter.skill_dim))
+        # Prefer to use the skills actually registered by the adapter. This
+        # avoids mismatches between a global `skill_count_per_algo` and the
+        # adapter's native skill count (e.g. RSD's `dim_option`).
+        try:
+            registered = skill_registry.get_skills_belonging_to_algo(adapter.algo_name)
+            skill_indices = list(range(len(registered)))
+        except Exception:
+            # Fallback to the configured count if registration failed for some reason
+            skill_indices = list(range(skill_registry.skill_count_per_algo))
 
     all_trajs = {}
     for k in skill_indices:
