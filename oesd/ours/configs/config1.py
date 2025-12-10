@@ -17,6 +17,7 @@ model_cfgs = []
 
 model_cfgs.append(ModelConfig(
     algo_name="RSD",
+    algo_color="green",
     checkpoint_path=os.path.join(CHECKPOINT_PATH, "RSD/4D_3P_img_dir_carry_orig_C/option_policy175.pt"),
     action_dim=ACTION_DIM,
     skill_dim=SKILL_DIM,
@@ -24,25 +25,26 @@ model_cfgs.append(ModelConfig(
 ))
 
 model_cfgs.append(ModelConfig(
-     algo_name="LSD",
-     checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/.."),
-     action_dim=None,
-     checkpoint_path=os.path.join(CHECKPOINT_PATH, "lsd/lsd_latest.pth"),
-     action_dim=6,
-     skill_dim=SKILL_DIM,
-     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
+    algo_name="LSD",
+    algo_color="purple",
+    checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/lsd_latest.pth"),
+    action_dim=ACTION_DIM,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
 ))
 
 model_cfgs.append(ModelConfig(
     algo_name="DIAYN",
+    algo_color="red",
     checkpoint_path=os.path.join(CHECKPOINT_PATH, "DIAYN/diayn_doorkey.pth"),
-    action_dim=ACTION_DIM,
+    action_dim=7,
     skill_dim=SKILL_DIM,
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DIAYN")},
 ))
 
 model_cfgs.append(ModelConfig(
     algo_name="DADS",
+    algo_color="pink",
     checkpoint_path=os.path.join(CHECKPOINT_PATH, "DADS/dads_doorkey.pth"),
     action_dim=ACTION_DIM,
     skill_dim=SKILL_DIM,

@@ -44,7 +44,8 @@ class MetaControllerEnv(gym.Env):
         self.key_pickup_reward = kwargs.get("key_pickup_reward", 0.0)
         self.door_open_reward = kwargs.get("door_open_reward", 0.0)
         self.key_drop_reward = kwargs.get("key_drop_reward", 0.0)
-        
+        self.not_move_reward = kwargs.get("not_move_reward", 0.0)
+
         # Visualization tracking
         self.current_algo = "None"
         self.current_global_skill = -1
@@ -85,60 +86,6 @@ class MetaControllerEnv(gym.Env):
         #     print(f"Arena Size: {base_env.arena.width} x {base_env.arena.height}") # Common in continuous envs
         # except AttributeError:
         #     pass
-
-
-
-
-        self.action_space = spaces.Discrete(len(self.registry.bag_of_skills))
-        
-        # Reward shaping parameters
-        self.key_pickup_reward = kwargs.get("key_pickup_reward", 0.0)
-        self.door_open_reward = kwargs.get("door_open_reward", 0.0)
-        self.key_drop_reward = kwargs.get("key_drop_reward", 0.0)
-        
-        # Visualization tracking
-        self.current_algo = "None"
-        self.current_global_skill = -1
-        self.current_local_skill = -1
-        self.current_step_in_skill = 0
-        self.render_mode = render_mode
-
-        # self._discrete_actions = [
-        #     self._env.actions.forward,
-        #     self._env.actions.left,
-        #     self._env.actions.right,
-        #     self._env.actions.pickup,
-        #     self._env.actions.drop,
-        #     self._env.actions.toggle,
-        # ]
-        # self._num_actions = len(self._discrete_actions)
-        # self.action_space = spaces.Box(
-        #     low=-action_scale,
-        #     high=action_scale,
-        #     shape=(self._num_actions,),
-        #     dtype=np.float32,
-        # )
-
-        base_env = self._env.unwrapped  # accessing the core environment behind all wrappers
-
-        # Try printing these common attributes to see which one exists:
-        # try:
-        #     print(f"Grid Size: {base_env.width} x {base_env.height}") # Common in MiniGrid
-        # except AttributeError:
-        #     pass
-
-        # try:
-        #     print(f"Grid Shape: {base_env.grid_size}") # Common in some custom envs
-        # except AttributeError:
-        #     pass
-
-        # try:
-        #     print(f"Arena Size: {base_env.arena.width} x {base_env.arena.height}") # Common in continuous envs
-        # except AttributeError:
-        #     pass
-
-
-
 
         self.action_space = spaces.Discrete(len(self.registry.bag_of_skills))
 
@@ -273,12 +220,17 @@ class MetaControllerEnv(gym.Env):
             
             # Check if we are carrying a key BEFORE the step
             was_carrying_key = isinstance(self._env.carrying, Key)
-            
+            # Capture agent position before the step
+            prev_pos = self._env.agent_pos
+
             mapped_action = self._map_action(primitive_action)
             obs, reward, terminated, truncated, info = self._env.step(mapped_action)
-            
+
             # Check if we are carrying a key AFTER the step
             is_carrying_key = isinstance(self._env.carrying, Key)
+            # Apply penalty if agent did not move (position unchanged)
+            if prev_pos == self._env.agent_pos:
+                reward += self.not_move_reward
 
             # If we were carrying a key, and now we are not, AND the action was DROP
             # then we apply the penalty (reward is usually negative)
@@ -287,14 +239,6 @@ class MetaControllerEnv(gym.Env):
                     reward += self.key_drop_reward
                     # print(f"KEY DROPPED! Penalty applied: {self.key_drop_reward}")
 
-            if render:
-                # Use our custom render to update title
-                frame = self.render()
-                if frame is not None:
-                    info['render'] = frame.transpose(2, 0, 1)
-
-            self._last_raw_obs = obs # Update for next micro-step
-            
             # --- Reward Shaping ---
             # Check for Key Pickup
             if not self._rewarded_key and self._env.carrying is not None:
@@ -313,6 +257,15 @@ class MetaControllerEnv(gym.Env):
                         self._rewarded_door = True
                         break
 
+            
+            if render:
+                # Use our custom render to update title
+                frame = self.render()
+                if frame is not None:
+                    info['render'] = frame.transpose(2, 0, 1)
+
+            self._last_raw_obs = obs # Update for next micro-step
+            
             total_reward += reward
             
             # If the task is solved or failed during the skill, stop early
@@ -383,13 +336,9 @@ class MetaControllerEnv(gym.Env):
         if frame is None:
             if hasattr(self._env, 'get_frame'):
                 # Standard tile_size for minigrid is 32
-                frame = self._env.get_frame(highlight=False, tile_size=32)
+                frame = self._env.get_frame(highlight=False, tile_size=128)
             elif hasattr(self._env.unwrapped, 'get_frame'):
-                frame = self._env.unwrapped.get_frame(highlight=False, tile_size=32)
-        
-        # Update Window Title if in human mode
-        self._update_window_title()
-
+                frame = self._env.unwrapped.get_frame(highlight=False, tile_size=128)
         
         # Update Window Title if in human mode
         self._update_window_title()

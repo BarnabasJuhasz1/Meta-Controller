@@ -16,7 +16,8 @@ from oesd.baselines.metra.models import ModelManager
 class MetraAdapter(BaseAdapter):
    
     def __init__(self, 
-                 algo_name: str, 
+                 algo_name: str,
+                 algo_color: str,
                  ckpt_path: str, 
                  action_dim: int,
                  save_dir: str, 
@@ -25,7 +26,7 @@ class MetraAdapter(BaseAdapter):
                  latent_dim: int = 2,
                  modelManager=ModelManager(phiNum=3,polNum=3)):
         
-        super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
+        super().__init__(algo_name, algo_color, ckpt_path, action_dim, save_dir, skill_registry)
 
         self.skill_dim = skill_dim
         self.latent_dim = latent_dim

@@ -58,6 +58,7 @@ class DIAYNAdapter(BaseAdapter):
     def __init__(
         self,
         algo_name: str,
+        algo_color: str,
         ckpt_path: str,
         action_dim: int,
         skill_dim: int, 
@@ -67,6 +68,7 @@ class DIAYNAdapter(BaseAdapter):
     ):
         super().__init__(
             algo_name=algo_name, 
+            algo_color=algo_color,
             ckpt_path=ckpt_path, 
             action_dim=action_dim, 
             save_dir=save_dir, 

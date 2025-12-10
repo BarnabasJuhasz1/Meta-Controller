@@ -79,9 +79,9 @@ class RSDAdapter(BaseAdapter):
     Adapter for your RSD implementation.
     Provides a uniform get_action() interface.
     """
-    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
+    def __init__(self, algo_name: str, algo_color: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
         # also makes sure self.device and self.skill_registry are set
-        super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
+        super().__init__(algo_name, algo_color, ckpt_path, action_dim, save_dir, skill_registry)
     
         self.option_policy_ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
 

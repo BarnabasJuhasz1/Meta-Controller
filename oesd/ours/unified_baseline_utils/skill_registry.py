@@ -9,7 +9,6 @@ class SkillRegistry:
         self.skill_count_per_algo = skill_count_per_algo
         # list of algorithms
         self.algos = []
-
         # Note: mapping from skill to algo is done by dividing with skill_count
 
     def register_baseline(self, algo:str, skill_list):
@@ -21,9 +20,13 @@ class SkillRegistry:
         
         self.bag_of_skills.extend(skill_list)
         self.algos.append(algo)
-
         print(f"Registered {algo} with skills: {skill_list}")
 
+    def get_algo_color(self, skill_idx):
+        """
+        Returns the color of the algorithm corresponding to the skill.
+        """
+        return self.algo_colors[skill_idx//self.skill_count_per_algo]
 
     def get_algo_from_skill_idx(self, skill_idx):
         """
