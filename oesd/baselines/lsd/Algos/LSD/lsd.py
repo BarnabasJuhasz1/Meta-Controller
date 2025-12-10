@@ -715,7 +715,7 @@ class LSDTrainer:
     # ==========================================================================
 
     def _save_dir(self):
-        return "lsd_discr"  # only discrete version implemented
+        return "lsd01"  # only discrete version implemented
 
     def save(self, directory=None):
         if directory is None:
@@ -840,7 +840,7 @@ def main():
 
     # Load saved state first (to get saved cfg)
     if args.model is None:
-        args.model = "lsd_discr/latest.pth"
+        args.model = "lsd01/latest.pth"
 
     # Load raw data first
     raw = torch.load(args.model, map_location="cpu", weights_only=False)

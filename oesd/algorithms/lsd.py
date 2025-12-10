@@ -28,8 +28,6 @@ Fully compatible with your console interface:
     python lsd.py skills
     python lsd.py phi
     python lsd.py zero_shot
-
-Author: ChatGPT (rewritten on request)
 """
 
 from __future__ import annotations
@@ -41,6 +39,7 @@ from typing import List, Tuple
 
 import numpy as np
 import torch
+import logging
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
@@ -48,6 +47,11 @@ from torch.nn.utils import spectral_norm
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from collections import deque
+
+# configure basic logging if not already configured by the app
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # MiniGrid environment
 import oesd.testing_playground.testing.example_minigrid as example_minigrid
@@ -94,6 +98,12 @@ class LSDConfig:
     # Misc
     reward_clip: float = 5.0
     log_interval: int = 50
+    # Alternative environment: use BaselineMiniGridEnv wrapper from baselines
+    use_baseline_minigrid: bool = False
+    # If True, keep observations in [0,1] (do NOT apply running zero-mean normalization)
+    obs_unit_scale: bool = False
+    # Autosave interval (episodes). If >0, save a checkpoint every N episodes.
+    autosave_interval: int = 10000
 
 
 # ======================================================================================
@@ -244,20 +254,46 @@ class LSDTrainer:
         # ENV SETUP
         # ─────────────────────────────────────────────────────────
 
-        self.env = example_minigrid.SimpleEnv(
-            size=cfg.size,
-            max_steps=cfg.max_steps,
-            render_mode=None
-        )
+        # Allow using the BaselineMiniGridEnv wrapper (which produces observations in [0,1])
+        if cfg.use_baseline_minigrid:
+            try:
+                from oesd.baselines.RSD.envs.minigrid_env import BaselineMiniGridEnv
+
+                # BaselineMiniGridEnv with env_name 'minigrid_small' maps to DoorKeyEnv(8)
+                self.env = BaselineMiniGridEnv(size=cfg.size, max_steps=cfg.max_steps, render_mode=None, env_name="minigrid_small")
+            except Exception:
+                # Fallback: try to import DoorKeyEnv from minigrid directly
+                try:
+                    from minigrid.envs import DoorKeyEnv
+
+                    self.env = DoorKeyEnv(size=8, max_steps=cfg.max_steps, render_mode=None)
+                except Exception:
+                    raise
+        else:
+            self.env = example_minigrid.SimpleEnv(
+                size=cfg.size,
+                max_steps=cfg.max_steps,
+                render_mode=None
+            )
 
         self._seed(cfg.seed)
 
         # get obs_dim
         obs = self._reset_env()
         obs_vec = self._obs_to_vec(obs)
-        self.obs_norm = RunningNorm()
-        self.obs_norm.update(obs_vec)
-        obs_n = self.obs_norm.normalize(obs_vec)
+
+        # Save the first observed vector for diagnostics
+        self._initial_obs_vec = obs_vec.copy()
+
+        # If using unit-scaled observations ([0,1]), do not apply running zero-mean normalization
+        if cfg.obs_unit_scale:
+            self.obs_norm = None
+            obs_n = obs_vec.astype(np.float32)
+        else:
+            self.obs_norm = RunningNorm()
+            self.obs_norm.update(obs_vec)
+            obs_n = self.obs_norm.normalize(obs_vec)
+
         obs_dim = obs_n.shape[0]
         self.obs_dim = obs_dim
 
@@ -310,11 +346,47 @@ class LSDTrainer:
         self.phi_points = deque(maxlen=5000)
         self.phi_colors = deque(maxlen=5000)
 
-        print(f"[init] obs_dim={obs_dim}, skill_dim={self.skill_dim}")
+        # Log full setup
+        self._log_setup()
 
     # ==========================================================================
     # UTILITIES
     # ==========================================================================
+
+    def _log_setup(self):
+        """Log environment and training setup information."""
+        try:
+            base_env = getattr(self.env, "_env", self.env)
+            env_cls = type(base_env).__name__
+            env_name = getattr(base_env, "env_name", None)
+        except Exception:
+            env_cls = type(self.env).__name__
+            env_name = None
+
+        # Add initial observation stats for sanity checks
+        try:
+            vec = np.asarray(getattr(self, "_initial_obs_vec", None))
+            if vec is not None:
+                obs_min = float(np.min(vec))
+                obs_max = float(np.max(vec))
+                obs_mean = float(np.mean(vec))
+            else:
+                obs_min = obs_max = obs_mean = None
+        except Exception:
+            obs_min = obs_max = obs_mean = None
+
+        msg = (
+            f"[setup] env_class={env_cls} env_name={env_name} "
+            f"size={self.cfg.size} use_baseline_minigrid={self.cfg.use_baseline_minigrid} "
+            f"obs_unit_scale={self.cfg.obs_unit_scale} device={self.device} "
+            f"obs_dim={getattr(self,'obs_dim',None)} skill_dim={getattr(self,'skill_dim',None)} "
+            f"num_skills={self.cfg.num_skills} max_steps_per_episode={self.cfg.max_steps_per_episode} "
+            f"replay_capacity={self.cfg.replay_capacity} batch_size={self.cfg.batch_size} "
+            f"lr_policy={self.cfg.lr_policy} lr_phi={self.cfg.lr_phi} save_dir={self._save_dir()} "
+            f"initial_obs_min={obs_min} initial_obs_max={obs_max} initial_obs_mean={obs_mean}"
+        )
+
+        logger.info(msg)
 
     def _seed(self, seed):
         random.seed(seed)
@@ -346,12 +418,30 @@ class LSDTrainer:
     def _obs_to_vec(self, obs):
         if isinstance(obs, tuple):
             obs = obs[0]
+        # If the environment already returns a flat array (our BaselineMiniGridEnv does), accept it
+        if isinstance(obs, np.ndarray):
+            return obs.astype(np.float32).flatten()
+
         if not isinstance(obs, dict):
-            raise RuntimeError("MiniGrid obs must be dict")
+            raise RuntimeError("MiniGrid obs must be dict or ndarray")
+
         img = obs["image"]  # guaranteed by MiniGrid
-        return img.astype(np.float32).flatten()
+        vec = img.astype(np.float32).flatten()
+
+        # If user requested unit scaling, convert uint8 image values to [0,1]
+        if getattr(self, "cfg", None) is not None and self.cfg.obs_unit_scale:
+            # If values appear in 0..255 range, scale; otherwise leave as-is
+            if vec.max() > 1.0:
+                vec = vec / 255.0
+
+        return vec
 
     def _obs_to_tensor(self, vec):
+        # If using unit-scaled observations, do not apply running zero-mean normalization
+        if self.cfg.obs_unit_scale:
+            n = vec.astype(np.float32)
+            return torch.tensor(n, dtype=torch.float32, device=self.device).unsqueeze(0)
+
         self.obs_norm.update(vec)
         n = self.obs_norm.normalize(vec)
         return torch.tensor(n, dtype=torch.float32, device=self.device).unsqueeze(0)
@@ -408,8 +498,34 @@ class LSDTrainer:
                 self._update_phi()
 
             if ep % cfg.log_interval == 0:
-                print(f"[Ep {ep:4d}] ret={ret:+.3f}  P={ploss:+.4f}  V={vloss:+.4f}  "
-                      f"H={ent:.3f}  φbuf={self.replay.size()}")
+                # Run-time observation sanity checks/logging
+                try:
+                    # peek at last stored replay sample if available
+                    sz = self.replay.size()
+                    if sz > 0:
+                        sample = self.replay.obs[(sz-1) % self.replay.capacity]
+                        s_min = float(np.min(sample))
+                        s_max = float(np.max(sample))
+                    else:
+                        s_min = s_max = None
+                except Exception:
+                    s_min = s_max = None
+
+                # If unit-scaled obs are requested, validate ranges and warn if outside [0,1]
+                if self.cfg.obs_unit_scale and (s_min is not None):
+                    if s_min < -1e-6 or s_max > 1.0 + 1e-6:
+                        logger.warning(f"[Ep {ep}] Replay obs out of [0,1] range: min={s_min} max={s_max}")
+
+                logger.info(f"[Ep {ep:4d}] ret={ret:+.3f}  P={ploss:+.4f}  V={vloss:+.4f}  "
+                            f"H={ent:.3f}  φbuf={self.replay.size()} obs_sample_min={s_min} obs_sample_max={s_max}")
+
+            # Autosave checkpoint every cfg.autosave_interval episodes
+            if cfg.autosave_interval and (ep % cfg.autosave_interval == 0):
+                logger.info(f"[Ep {ep}] Autosave checkpoint (every {cfg.autosave_interval} episodes)")
+                try:
+                    self.save()
+                except Exception as e:
+                    logger.exception(f"Autosave failed at episode {ep}: {e}")
 
     # ==========================================================================
     # RUN EPISODE
@@ -516,13 +632,22 @@ class LSDTrainer:
         if batch is None:
             return
         s, s2, Z_i = batch   # Z_i: [B, skill_dim]
-
-        # normalize replayed observations with current running stats
-        if self.obs_norm.mean is not None:
+        # normalize replayed observations with current running stats (unless unit-scaled obs requested)
+        if (not self.cfg.obs_unit_scale) and (self.obs_norm is not None) and (self.obs_norm.mean is not None):
             mean = torch.tensor(self.obs_norm.mean, dtype=torch.float32, device=self.device)
             var = torch.tensor(self.obs_norm.var, dtype=torch.float32, device=self.device)
             s = (s - mean) / (torch.sqrt(var) + 1e-8)
             s2 = (s2 - mean) / (torch.sqrt(var) + 1e-8)
+        else:
+            # If unit-scaled mode, validate that replayed observations are within expected [0,1] range
+            if self.cfg.obs_unit_scale:
+                try:
+                    s_min = float(torch.min(s).cpu().numpy())
+                    s_max = float(torch.max(s).cpu().numpy())
+                    if s_min < -1e-6 or s_max > 1.0 + 1e-6:
+                        logger.warning(f"_update_phi: replay sample outside [0,1] range: min={s_min} max={s_max}")
+                except Exception:
+                    pass
 
         phi_s  = self.phi(s)
         phi_s2 = self.phi(s2)
@@ -561,11 +686,30 @@ class LSDTrainer:
 
         # new env with rendering
         old = self.env
-        self.env = example_minigrid.SimpleEnv(
-            size=self.cfg.size,
-            max_steps=self.cfg.max_steps,
-            render_mode="human"
-        )
+        # build env according to current config (respect use_baseline_minigrid)
+        if self.cfg.use_baseline_minigrid:
+            try:
+                from oesd.baselines.RSD.envs.minigrid_env import BaselineMiniGridEnv
+
+                self.env = BaselineMiniGridEnv(size=self.cfg.size, max_steps=self.cfg.max_steps,
+                                               render_mode="human", env_name="minigrid_small")
+            except Exception:
+                try:
+                    from minigrid.envs import DoorKeyEnv
+
+                    self.env = DoorKeyEnv(size=8, max_steps=self.cfg.max_steps, render_mode="human")
+                except Exception:
+                    self.env = example_minigrid.SimpleEnv(
+                        size=self.cfg.size,
+                        max_steps=self.cfg.max_steps,
+                        render_mode="human"
+                    )
+        else:
+            self.env = example_minigrid.SimpleEnv(
+                size=self.cfg.size,
+                max_steps=self.cfg.max_steps,
+                render_mode="human"
+            )
 
         obs = self._reset_env()
         ovec = self._obs_to_vec(obs)
@@ -612,11 +756,30 @@ class LSDTrainer:
         K = self.cfg.num_skills if num_skills is None else num_skills
         max_steps = self.cfg.max_steps_per_episode if max_steps is None else max_steps
 
-        env = example_minigrid.SimpleEnv(
-            size=self.cfg.size,
-            max_steps=self.cfg.max_steps,
-            render_mode=None
-        )
+        # create environment consistent with trainer config
+        if self.cfg.use_baseline_minigrid:
+            try:
+                from oesd.baselines.RSD.envs.minigrid_env import BaselineMiniGridEnv
+
+                env = BaselineMiniGridEnv(size=self.cfg.size, max_steps=self.cfg.max_steps,
+                                         render_mode=None, env_name="minigrid_small")
+            except Exception:
+                try:
+                    from minigrid.envs import DoorKeyEnv
+
+                    env = DoorKeyEnv(size=8, max_steps=self.cfg.max_steps, render_mode=None)
+                except Exception:
+                    env = example_minigrid.SimpleEnv(
+                        size=self.cfg.size,
+                        max_steps=self.cfg.max_steps,
+                        render_mode=None
+                    )
+        else:
+            env = example_minigrid.SimpleEnv(
+                size=self.cfg.size,
+                max_steps=self.cfg.max_steps,
+                render_mode=None
+            )
 
         trajs = []
 
@@ -717,7 +880,7 @@ class LSDTrainer:
     # ==========================================================================
 
     def _save_dir(self):
-        return "lsd_discr"  # only discrete version implemented
+        return "lsd01"  # save directory for this training setup
 
     def save(self, directory=None):
         if directory is None:
@@ -731,9 +894,9 @@ class LSDTrainer:
         state={
             "phi":self.phi.state_dict(),
             "policy":self.policy.state_dict(),
-            "obs_mean":self.obs_norm.mean,
-            "obs_var":self.obs_norm.var,
-            "obs_count":self.obs_norm.count,
+            "obs_mean": (None if self.obs_norm is None else self.obs_norm.mean),
+            "obs_var": (None if self.obs_norm is None else self.obs_norm.var),
+            "obs_count": (None if self.obs_norm is None else self.obs_norm.count),
             "skills":self.discrete_Z.cpu().numpy(),
             "cfg":self.cfg.__dict__
         }
@@ -763,9 +926,11 @@ class LSDTrainer:
 
         self.phi.load_state_dict(data["phi"])
         self.policy.load_state_dict(data["policy"])
-        self.obs_norm.mean=data["obs_mean"]
-        self.obs_norm.var=data["obs_var"]
-        self.obs_norm.count=data["obs_count"]
+        # Only restore running stats if trainer currently maintains obs_norm
+        if self.obs_norm is not None:
+            self.obs_norm.mean = data.get("obs_mean", None)
+            self.obs_norm.var = data.get("obs_var", None)
+            self.obs_norm.count = data.get("obs_count", None)
         # Restore full configuration from save file
         saved_cfg = data.get("cfg", None)
         if saved_cfg is not None:
@@ -812,6 +977,11 @@ def main():
     p.add_argument("--model",type=str)
     p.add_argument("--resume",action="store_true",help="If set, load the model (or latest) and resume training")
     p.add_argument("--skill", type=int)
+    p.add_argument("--use-baseline-minigrid", action="store_true", help="Use BaselineMiniGridEnv (DoorKeyEnv size 8) from oesd baselines")
+    p.add_argument("--obs-01", action="store_true", help="Keep observations in [0,1] (do not apply running zero-mean normalization)")
+    p.add_argument("--autosave-interval", type=int, help="Automatically save a checkpoint every N episodes (default from config)")
+    p.add_argument("--entropy-coef", type=float, help="Override config entropy coefficient")
+    p.add_argument("--phi-updates", type=int, help="Override phi_updates_per_episode in config")
     args = p.parse_args()
 
     # -----------------------------
@@ -819,11 +989,21 @@ def main():
     # -----------------------------
     if args.command == "train":
         cfg = LSDConfig()
+        if args.use_baseline_minigrid:
+            cfg.use_baseline_minigrid = True
+        if args.obs_01:
+            cfg.obs_unit_scale = True
+        if args.autosave_interval is not None:
+            cfg.autosave_interval = int(args.autosave_interval)
         if args.episodes:
             cfg.num_episodes = args.episodes
         if args.num_skills:
             cfg.num_skills = args.num_skills
             cfg.skill_dim = args.num_skills
+        if args.entropy_coef is not None:
+            cfg.entropy_coef = float(args.entropy_coef)
+        if args.phi_updates is not None:
+            cfg.phi_updates_per_episode = int(args.phi_updates)
 
         trainer = LSDTrainer(cfg)
         # If requested, load an existing model (or latest) before training
@@ -842,7 +1022,7 @@ def main():
 
     # Load saved state first (to get saved cfg)
     if args.model is None:
-        args.model = "lsd_discr/latest.pth"
+        args.model = "lsd01/latest.pth"
 
     # Load raw data first
     raw = torch.load(args.model, map_location="cpu", weights_only=False)
@@ -851,6 +1031,16 @@ def main():
     saved_cfg = LSDConfig()
     for k, v in raw["cfg"].items():
         setattr(saved_cfg, k, v)
+
+    # Allow CLI to override saved config for quick visualizations/attempts
+    # (so users can run attempts on a different env than the one stored in the checkpoint)
+    if args.use_baseline_minigrid:
+        saved_cfg.use_baseline_minigrid = True
+    if args.obs_01:
+        saved_cfg.obs_unit_scale = True
+    if args.num_skills:
+        saved_cfg.num_skills = args.num_skills
+        saved_cfg.skill_dim = args.num_skills
 
     # Build trainer with correct cfg (correct skill_dim, num_skills, etc.)
     trainer = LSDTrainer(saved_cfg)

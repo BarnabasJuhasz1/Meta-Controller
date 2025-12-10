@@ -588,6 +588,6 @@ class LSDTrainer:
         print(f"[save] {path}")
 
 
-    def resume_from(self, path="lsd_discr/latest.pth"):
+    def resume_from(self, path="lsd01/latest.pth"):
         self.load(path)
         print(f"[resume] loaded {path}")

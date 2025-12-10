@@ -178,6 +178,9 @@ parser.add_argument("--render_mode", type=str, default="rgb_array")
 parser.add_argument("--skill_idx", type=int, default=0)
 parser.add_argument("--config", type=str, default="configs/config1.py")
 parser.add_argument("--skill_count", type=int, default=8)
+parser.add_argument("--skill_sets", action="append", type=str, default=None,
+                help="Repeatable. Comma-separated skill indices for a model.\n"
+                    "Example: --skill_sets 0,1 --skill_sets 2  (two models: first shows skills [0,1], second [2])")
 
 
 def main(_A: argparse.Namespace):
@@ -198,15 +201,16 @@ def main(_A: argparse.Namespace):
         seed=_A.seed,
         position_fn=unified_position_fn,
         skill_count=_A.skill_count,
+        skill_sets=None if _A.skill_sets is None else [ [int(x) for x in s.split(",") if x.strip()!=''] for s in _A.skill_sets ],
     )
     # construct  SingleVisualizer 
     visualizer = SingleVisualizer(vis_cfg)
 
     # visualizer.update_relative_motion = update_relative_motion
 
-    # trajectories = visualizer.sample_trajectories()
-
-    # visualizer.plot_trajectories(trajectories)
+    # sample and plot
+    trajectories = visualizer.sample_trajectories()
+    visualizer.plot_trajectories(trajectories)
 
     print("\nVisualization complete.\n")
 

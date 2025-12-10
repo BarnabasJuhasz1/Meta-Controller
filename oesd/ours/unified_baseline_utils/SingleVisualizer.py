@@ -31,6 +31,7 @@ class VisualizerConfig:
     seed: int
     position_fn: Callable      # unified_position_fn
     skill_count: int
+    skill_sets: list | None = None  # optional list of per-model skill index lists
 
 
 # ============================================================================
@@ -55,6 +56,9 @@ class SingleVisualizer:
         self.seed = cfg.seed
         self.position_fn = cfg.position_fn
         self.skill_count = cfg.skill_count
+        # optional per-model skill selections: list of lists (one per model)
+        # e.g. cfg.skill_sets = [[0,1], [2]] or None
+        self.skill_sets = cfg.skill_sets
 
         # INITIALIZE SKILL REGISTRY
         self.skill_registry = SkillRegistry(self.skill_count)
@@ -75,6 +79,7 @@ class SingleVisualizer:
 
         for t in range(self.horizon):
             # compute action
+            # model_interface.get_action supports optional skill override via keyword skill_z
             action = model_interface.get_action(obs, deterministic=self.deterministic)
 
             # step env
@@ -103,15 +108,72 @@ class SingleVisualizer:
         results = {}
 
         for mconfig, model in zip(self.models, self.model_interfaces):
-            name = mconfig.algo
-            results[name] = []
+            name = getattr(mconfig, "algo", None) or getattr(mconfig, "algo_name", None) or "model"
             print(f"[Visualizer] Sampling {self.num_episodes} episodes for {name}...")
 
-            for ep in range(self.num_episodes):
-                traj = self._run_episode(model)
-                results[name].append(traj)
+            # determine which skill indices to visualize for this model
+            skill_idxs = None
+            if self.skill_sets is not None:
+                # if skill_sets provided and matches models length, use per-model list
+                if len(self.skill_sets) == len(self.models):
+                    skill_idxs = list(self.skill_sets[self.models.index(mconfig)])
+                elif len(self.skill_sets) == 1:
+                    skill_idxs = list(self.skill_sets[0])
+            # default: use current skill only (None special marker)
+            if skill_idxs is None:
+                skill_idxs = [None]
+
+            # collect per-skill
+            for sidx in skill_idxs:
+                key = f"{name}" if sidx is None else f"{name}_s{sidx}"
+                results[key] = []
+                for ep in range(self.num_episodes):
+                    # if adapter supports set_skill and we have an index, set it
+                    try:
+                        if sidx is not None and hasattr(model, "set_skill"):
+                            model.set_skill(int(sidx))
+                            traj = self._run_episode(model)
+                        elif sidx is not None and hasattr(model, "sample_skill"):
+                            # try to obtain skill vector by index via skill registry if possible
+                            # otherwise pass None and adapter will use its default
+                            try:
+                                # skill_registry may expose registered skills
+                                skill_vec = model.skill_registry.get_skill_by_index(name, int(sidx))
+                            except Exception:
+                                skill_vec = None
+                            if skill_vec is not None:
+                                traj = self._run_episode_with_skill(model, skill_vec)
+                            else:
+                                traj = self._run_episode(model)
+                        else:
+                            traj = self._run_episode(model)
+                    except Exception:
+                        traj = self._run_episode(model)
+                    results[key].append(traj)
 
         return results
+
+    def _run_episode_with_skill(self, model_interface, skill_vec):
+        """Run episode while forcing a skill vector (numpy or tensor)."""
+        env = self.env_config.factory()
+        obs, _ = env.reset(seed=self.seed)
+
+        traj = []
+        pos = self.position_fn(env, obs, {})
+        traj.append(pos)
+
+        for t in range(self.horizon):
+            action = model_interface.get_action(obs, deterministic=self.deterministic, skill_z=skill_vec)
+            obs, reward, terminated, truncated, info = env.step(action)
+            setattr(env, "_last_action", int(action))
+            if hasattr(self, "update_relative_motion"):
+                self.update_relative_motion(env)
+            pos = self.position_fn(env, obs, info)
+            traj.append(pos)
+            if terminated or truncated:
+                break
+
+        return np.array(traj, dtype=np.float32)
 
     # ----------------------------------------------------------------------
     # METRA-style visualization
@@ -154,20 +216,45 @@ class SingleVisualizer:
 
         colors = {}
         for i, mconfig in enumerate(self.models):
-            colors[mconfig.algo] = base_colors[i % len(base_colors)]
+            key = getattr(mconfig, "algo", None) or getattr(mconfig, "algo_name", None) or f"model{i}"
+            colors[key] = base_colors[i % len(base_colors)]
 
         # ------------------------------------------------------------------
         # 3. Overlay all trajectories
         # ------------------------------------------------------------------
+        def _lighten_color(hexcolor, amount=0.5):
+            # mix with white to lighten
+            import matplotlib.colors as mc
+            c = np.array(mc.to_rgb(hexcolor))
+            white = np.ones_like(c)
+            return tuple(c + (white - c) * float(amount))
+
         for model_name, traj_list in trajectories.items():
-            color = colors[model_name]
+            # allow keys like 'LSD' or 'LSD_s0'
+            if "_s" in model_name:
+                base, sstr = model_name.split("_s", 1)
+                try:
+                    sidx = int(sstr)
+                except Exception:
+                    sidx = 0
+            else:
+                base = model_name
+                sidx = None
+
+            base_color = colors.get(base, "#888888")
 
             for traj in traj_list:
                 traj = np.array(traj)
                 if len(traj) < 2:
                     continue
-                ax.plot(traj[:, 0], traj[:, 1],
-                        color=color, alpha=0.7, linewidth=1.2)
+                if sidx is None:
+                    plot_color = base_color
+                else:
+                    # For different skills, slightly lighten the base color
+                    amt = min(0.8, 0.15 * (sidx + 1))
+                    plot_color = _lighten_color(base_color, amount=amt)
+
+                ax.plot(traj[:, 0], traj[:, 1], color=plot_color, alpha=0.8, linewidth=1.2)
 
         # ------------------------------------------------------------------
         # 4. Clean formatting

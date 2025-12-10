@@ -2,7 +2,7 @@ import os
 from oesd.ours.unified_baseline_utils.SingleLoader import ModelConfig
 
 VIS_PATH = "oesd/visualizations/"
-CHECKPOINT_PATH = "oesd/baseline_checkpoints/"
+CHECKPOINT_PATH = "checkpoints/"
 
 SKILL_DIM = 8
 
@@ -10,8 +10,8 @@ model_cfgs = []
 
 model_cfgs.append(ModelConfig(
      algo_name="LSD",
-     checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/.."),
-     action_dim=None,
+     checkpoint_path=os.path.join(CHECKPOINT_PATH, "lsd/lsd_latest.pth"),
+     action_dim=6,
      skill_dim=SKILL_DIM,
      adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
 ))
