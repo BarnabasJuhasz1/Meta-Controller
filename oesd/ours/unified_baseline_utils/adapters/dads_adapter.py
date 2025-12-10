@@ -34,11 +34,12 @@ class DADSAdapter(BaseAdapter):
     """
     algo_name = "dads"
 
-    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
-        super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
+    def __init__(self, algo_name: str, algo_color: str, ckpt_path: str, action_dim: int, skill_dim: int, save_dir: str, skill_registry: SkillRegistry):
+        super().__init__(algo_name, algo_color, ckpt_path, action_dim, save_dir, skill_registry)
+
+        self.skill_dim = skill_dim
 
         # Initialize the DADS Architecture
-        self.skill_dim = 8  # Hardcoded based on training
         self.cfg = self._create_config(action_dim)
 
         # Initialize networks
@@ -48,6 +49,21 @@ class DADSAdapter(BaseAdapter):
 
         # Initialize trainer
         self.trainer = DADSTrainer(policy_net, skill_dynamics_net, value_net, self.cfg)
+
+        # --- REGISTER SKILLS ---
+        if self.skill_registry:
+            print(f"[DADSAdapter] Registering {self.skill_dim} skills for {self.algo_name}...")
+            skill_list = []
+            for i in range(self.skill_dim):
+                z = np.zeros(self.skill_dim, dtype=np.float32)
+                z[i] = 1.0
+                skill_list.append(z)
+            
+            # Ensure we match the registry's expectation
+            # If registry expects count X and we have Y != X, we might need to pad/truncate or error.
+            # But let's assume config aligns them.
+            self.skill_registry.register_baseline(self.algo_name, skill_list)
+
 
     def _create_config(self, action_dim):
         """Create a configuration object for DADSTrainer."""
@@ -77,10 +93,34 @@ class DADSAdapter(BaseAdapter):
             print(f"Error loading DADS weights: {e}")
             raise e
 
-    def preprocess_observation(self, raw_obs):
-        """Preprocess the raw observation into the required input format."""
-        obs = torch.tensor(raw_obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+    # def process_obs(self, raw_obs, env=None):
+    #     """Preprocess the raw observation into the required input format."""
+    #     obs = torch.tensor(raw_obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+    #     return obs
+    def process_obs(self, obs, env):
+        if isinstance(obs, tuple):
+            obs = obs[0]
+        
+        # 1. Flatten and normalize image
+        image = obs["image"].astype(np.float32) / 255.0
+        
+        # 2. Normalize direction (0-3 becomes 0.0-1.0)
+        direction = np.array([obs["direction"] / 3.0], dtype=np.float32)
+
+        # 3. Add Carrying (Binary)
+        # Accessing .unwrapped is safer in case of other wrappers
+        # env_base = self.env.unwrapped 
+        carrying_val = 1.0 if env.carrying is not None else 0.0
+        carrying = np.array([carrying_val], dtype=np.float32)
+
+        # Concatenate everything: [Image flat, Direction, Carrying, PosX, PosY]
+        obs = np.concatenate([
+            image.flatten(), 
+            direction, 
+            carrying, 
+        ], axis=0)
         return obs
+        # return torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
 
     def sample_skill(self, rng):
         """Sample a discrete one-hot skill vector."""
@@ -89,9 +129,18 @@ class DADSAdapter(BaseAdapter):
         skill_vec[idx] = 1.0
         return skill_vec
 
-    def get_action(self, obs, skill_vec, deterministic=False):
+    def get_action(self, obs, skill_z, deterministic=False):
+        # (149,) (8,)
+        #print(obs.shape, skill_z.shape)
+
         """Get the action from the policy given the observation and skill vector."""
         with torch.no_grad():
-            logits = self.trainer.policy_net(obs, skill_vec)
+            # obs = torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+            obs = torch.from_numpy(obs).to(self.device).unsqueeze(0)
+            skill_z = torch.tensor(skill_z, dtype=torch.float32, device=self.device).unsqueeze(0)
+
+            logits = self.trainer.policy_net(obs, skill_z)
             action = torch.argmax(logits, dim=-1) if deterministic else torch.multinomial(torch.softmax(logits, dim=-1), 1)
         return action.item()
+
+    

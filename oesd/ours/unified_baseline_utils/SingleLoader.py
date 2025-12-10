@@ -13,7 +13,7 @@ from oesd.ours.unified_baseline_utils.adapters.BaseAdapter import BaseAdapter
 from oesd.ours.unified_baseline_utils.adapters.LSD_adapter import LSDAdapter
 from oesd.ours.unified_baseline_utils.adapters.RSD_adapter import RSDAdapter
 from oesd.ours.unified_baseline_utils.adapters.metra_adapter import MetraAdapter
-from oesd.ours.unified_baseline_utils.adapters.dads_adapter import DadsAdapter
+from oesd.ours.unified_baseline_utils.adapters.dads_adapter import DADSAdapter
 from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 
 # ============================================================================
@@ -23,6 +23,7 @@ from oesd.ours.unified_baseline_utils.skill_registry import SkillRegistry
 @dataclass
 class ModelConfig:
     algo_name: str
+    algo_color: str
     checkpoint_path: str
     action_dim: int
     skill_dim: int
@@ -44,6 +45,7 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
     if "lsd" in algo_name:
         adapter = LSDAdapter(
             algo_name=algo_name,
+            algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
             save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
@@ -53,6 +55,7 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
     elif "rsd" in algo_name:
         adapter = RSDAdapter(
             algo_name=algo_name,
+            algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
             save_dir=cfg.adapter_kwargs.get("save_dir", "./"),
@@ -63,6 +66,7 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
     elif "diayn" in algo_name:        
         adapter = DIAYNAdapter(
             algo_name=algo_name,
+            algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
             skill_dim=cfg.skill_dim,
@@ -72,8 +76,9 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
         return adapter
     
     elif algo_name == "dads":
-        adapter = DadsAdapter(
+        adapter = DADSAdapter(
             algo_name=algo_name,
+            algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
             skill_dim=cfg.skill_dim,
@@ -84,6 +89,7 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
     elif algo_name == "metra":
         adapter = MetraAdapter(
             algo_name=algo_name,
+            algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
             skill_dim=cfg.skill_dim,

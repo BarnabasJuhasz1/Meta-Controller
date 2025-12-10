@@ -76,7 +76,7 @@ import torch.optim as optim
 
 import gymnasium as gym
 import minigrid
-from dads_trainer import DADSTrainer
+from oesd.baselines.dads.scripts.dads_trainer import DADSTrainer
 
 
 # -------------------------- Config and utilities -------------------------- #

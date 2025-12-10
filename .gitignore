@@ -45,6 +45,7 @@ output/
 train_results/
 jobs/
 visualizations/
+oesd/ours/evaluation/results/
 
 # experiments
 *exp/

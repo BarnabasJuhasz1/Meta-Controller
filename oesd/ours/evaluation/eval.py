@@ -4,9 +4,14 @@ import time
 import json
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import gymnasium as gym
 from stable_baselines3 import PPO
 from collections import defaultdict, Counter
+from pathlib import Path
+
+import glob
+from PIL import Image
 
 # Add project root to path if needed (though running as module usually handles this)
 import sys
@@ -18,20 +23,28 @@ from oesd.ours.contoller.meta_env_wrapper import MetaControllerEnv
 from oesd.ours.unified_baseline_utils.SingleLoader import load_model_from_config, load_config
 from minigrid.core.world_object import Door, Key
 
+import re
+
+# This key function finds all sequences of digits and converts them to integers
+def natural_key(path):
+    # This turns "model_100_.zip" into the list ['model_', 100, '_.zip']
+    return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', path.name)]
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate Meta Controller")
     parser.add_argument("--env_name", type=str, default="minigrid")
     parser.add_argument("--skill_count_per_algo", type=int, default=10)
     parser.add_argument("--skill_duration", type=int, default=10)
     parser.add_argument("--config_path", type=str, default="oesd/ours/configs/config1.py")
-    parser.add_argument("--model_path", type=str, required=True, help="Path to the trained meta-controller model .zip file")
+    parser.add_argument("--model_dir", type=str, required=True, help="Path to the directory containing trained meta-controller model .zip files")
+    # parser.add_argument("--model_path", type=str, required=True, help="Path to the trained meta-controller model .zip file")
     parser.add_argument("--num_episodes", type=int, default=10, help="Number of episodes to evaluate")
     parser.add_argument("--output_dir", type=str, default="oesd/ours/evaluation/results", help="Directory to save results")
     parser.add_argument("--render", action="store_true", help="Render the environment during evaluation")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     return parser.parse_args()
 
-def evaluate(args):
+def main(args):
     # 1. Setup
     os.makedirs(args.output_dir, exist_ok=True)
     
@@ -54,9 +67,22 @@ def evaluate(args):
         render_mode=render_mode
     )
     
-    print(f"Loading Meta-Controller from {args.model_path}...")
-    model = PPO.load(args.model_path)
+    print(f"Loading Meta-Controller from {args.model_dir}...")
+
+    # for zip_file in sorted(Path(args.model_dir).rglob('*.zip')):
+    for zip_file in sorted(Path(args.model_dir).rglob('*.zip'), key=natural_key):
+        # load the model
+        model = PPO.load(zip_file, device="cpu")
+        # get the file name without extension
+        filename = zip_file.stem
+        # evaluate the model
+        evaluate(args, meta_env, model, skill_registry, model_interfaces, filename)
+
+    make_gif(args.output_dir)
     
+    print(f"\nGIF saved to {args.output_dir}/skill_usage_over_time.gif")
+
+def evaluate(args, meta_env, model, skill_registry, model_interfaces, filename):
     # 2. Evaluation Loop
     episode_metrics = []
     
@@ -114,9 +140,10 @@ def evaluate(args):
         print(f"Episode {ep+1}: Reward={ep_reward:.4f}, Steps={step_count}, Success={is_success}")
 
     # 3. Analyze Results
-    analyze_and_visualize(episode_metrics, args.output_dir, skill_registry)
+    analyze_and_visualize(episode_metrics, args.output_dir, skill_registry, model_interfaces, filename)
 
-def analyze_and_visualize(metrics, output_dir, registry):
+
+def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filename):
     # Aggregated Metrics
     rewards = [m["reward"] for m in metrics]
     successes = [m["success"] for m in metrics]
@@ -151,7 +178,7 @@ def analyze_and_visualize(metrics, output_dir, registry):
         "episodes": metrics
     }
     
-    with open(os.path.join(output_dir, "results.json"), "w") as f:
+    with open(os.path.join(output_dir, f"{filename}_results.json"), "w") as f:
         json.dump(results, f, indent=4)
 
     # --- Visualizations ---
@@ -161,12 +188,18 @@ def analyze_and_visualize(metrics, output_dir, registry):
     # Fill gaps for skills not used
     x = range(len(registry.bag_of_skills))
     y = [skill_counts.get(i, 0) for i in x]
+    colors = [model_interfaces[registry.get_algo_from_skill_idx(i)].algo_color for i in x]
+
+    # Create legend patches
+    handles = [mpatches.Patch(color=model_interfaces[i].algo_color, label=model_interfaces[i].algo_name) for i in model_interfaces.keys()]
+
+    plt.bar(x, y, color=colors, edgecolor='black')
     
-    plt.bar(x, y, color='skyblue', edgecolor='black')
     plt.xlabel("Global Skill ID")
     plt.ylabel("Frequency")
-    plt.title(f"Skill Usage Distribution (Succ. Rate: {success_rate:.2%})")
-    plt.savefig(os.path.join(output_dir, "skill_usage.png"))
+    plt.legend(handles=handles, loc="upper right")
+    plt.title(f"Skill Usage Distribution (Steps: {filename}, Succ. Rate: {success_rate:.2%}, Num. of Skills: {unique_skills_count})")
+    plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
     plt.close()
     
     # 2. HRL Timeline (for the first 5 episodes or best success)
@@ -211,10 +244,10 @@ def analyze_and_visualize(metrics, output_dir, registry):
         ax.set_title(f"Episode {i+1} Timeline (Success: {ep_data['success']}, Reward: {ep_data['reward']:.2f})")
         
         # Annotate algo names roughly? Maybe too cluttered.
-        
+    
     plt.xlabel("Timesteps")
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "hrl_timeline.png"))
+    plt.savefig(os.path.join(output_dir, f"{filename}_hrl_timeline.png"))
     plt.close()
     
     # 3. Strategy Analysis (Textual)
@@ -237,7 +270,7 @@ def analyze_and_visualize(metrics, output_dir, registry):
     print(analysis_text)
 
     # --- Save Report MD ---
-    report_path = os.path.join(output_dir, "report.md")
+    report_path = os.path.join(output_dir, f"{filename}_report.md")
     with open(report_path, "w") as f:
         f.write(f"# Evaluation Report\n\n")
         f.write(f"- **Success Rate**: {success_rate*100:.2f}%\n")
@@ -246,11 +279,31 @@ def analyze_and_visualize(metrics, output_dir, registry):
         f.write(f"- **Entropy**: {entropy:.4f}\n\n")
         f.write(f"### Strategy Analysis\n")
         f.write(f"> {analysis_text}\n\n")
-        f.write(f"![Skill Usage](skill_usage.png)\n")
-        f.write(f"![Timeline](hrl_timeline.png)\n")
+        f.write(f"![Skill Usage]({filename}_skill_usage.png)\n")
+        f.write(f"![Timeline]({filename}_hrl_timeline.png)\n")
     
     print(f"\nReport saved to {report_path}")
 
+
+def make_gif(frame_folder):
+    # 1. Create the file pattern (e.g., all pngs starting with "frame_")
+    # Change 'frame_*.png' to match your specific naming convention
+    files = glob.glob(f"{frame_folder}/*_skill_usage.png")
+    
+    # 2. Sort the files
+    # Standard python sort(). See "Handling Sorting" below if you have issues.
+    files.sort() 
+
+    # 3. Load the images
+    frames = [Image.open(image) for image in files]
+    
+    # 4. Save the GIF
+    # duration is in milliseconds (e.g., 500 = 0.5 seconds per frame)
+    # loop=0 means loop forever
+    frame_one = frames[0]
+    frame_one.save(os.path.join(frame_folder, "skill_usage_over_time.gif"), format="GIF", append_images=frames[1:],
+               save_all=True, duration=500, loop=0)
+
 if __name__ == "__main__":
     args = parse_args()
-    evaluate(args)
+    main(args)

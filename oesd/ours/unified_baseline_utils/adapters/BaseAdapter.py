@@ -12,8 +12,9 @@ class BaseAdapter:
         - get_action(obs, deterministic)
         - process_obs(obs)
     """
-    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
+    def __init__(self, algo_name: str, algo_color: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
         self.algo_name = algo_name
+        self.algo_color = algo_color
         self.ckpt_path = ckpt_path
         self.action_dim = action_dim
         self.save_dir = save_dir

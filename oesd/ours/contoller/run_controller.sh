@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MODEL_PATH="ours/train_results/checkpoints/rl_model_3200_steps"
+MODEL_PATH="ours/train_results/checkpoints/controller_test3/controller_89600_steps"
 
 /home/juhasz/miniforge3/envs/rsd/bin/python ours/contoller/run_controller.py \
     --env_name minigrid \

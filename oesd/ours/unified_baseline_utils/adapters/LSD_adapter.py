@@ -19,8 +19,8 @@ class LSDAdapter(BaseAdapter):
     Provides a uniform get_action() interface.
     """
 
-    def __init__(self, algo_name: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
-        super().__init__(algo_name, ckpt_path, action_dim, save_dir, skill_registry)
+    def __init__(self, algo_name: str, algo_color: str, ckpt_path: str, action_dim: int, save_dir: str, skill_registry: SkillRegistry):
+        super().__init__(algo_name, algo_color, ckpt_path, action_dim, save_dir, skill_registry)
 
         # Load trainer + model weights
         cfg = LSDConfig()
