@@ -35,6 +35,8 @@ class MetraAdapter(BaseAdapter):
         # ============================
         # Expect: modelManager.giveModels() → (PhiNetClass, PolicyClass)
 
+        
+
         PhiClass, PolicyClass = modelManager.giveModels()
 
         self.phi = PhiClass(latent_dim=latent_dim).to(self.device)
@@ -76,6 +78,7 @@ class MetraAdapter(BaseAdapter):
     # ----------------------------------------------------------------------
     # Unified interface
     # ----------------------------------------------------------------------
+
     def get_action(self, obs, skill_z, deterministic=False):
         """
         obs: numpy array for one observation

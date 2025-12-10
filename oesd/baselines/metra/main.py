@@ -40,7 +40,7 @@ def main():
     metra = DiscreteSkillMetra(env, mM ,n_skills=nSkills,lmbd=30.0, device=device)
     
 
-    metra.train(num_epochs=200, steps_per_epoch=200, log_interval=100)
+    metra.train(num_epochs=500, steps_per_epoch=20, log_interval=100)
     
     metra.save_models()
     

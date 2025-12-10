@@ -12,7 +12,7 @@ from matplotlib.animation import FuncAnimation
 
 def extract_state(obs, env):
 
-    current_env = env.env
+    '''current_env = env.env
     
     while hasattr(current_env, 'env'):
         if hasattr(current_env, 'agent_pos'):
@@ -32,7 +32,16 @@ def extract_state(obs, env):
     
     # Last resort: return zeros or raise error
     print("Warning: Could not extract agent position, returning zeros")
-    return np.array([0, 0], dtype=np.float32)
+    return np.array([0, 0], dtype=np.float32)'''
+    if isinstance(obs, tuple):
+        obs = obs[0]
+
+    if not isinstance(obs, dict):
+        raise RuntimeError("MiniGrid obs must be a dict")
+
+    img = obs["image"]      
+
+    return img.astype(np.float32).flatten()   
 
 class MetraWrapper:
     def __init__(self, env):
@@ -62,6 +71,8 @@ class MetraWrapper:
         self.s = s_next
         done = terminated or truncated
         return old_s, s_next, done, info
+
+        
     
     def render(self):
         return self.env.render()
@@ -70,7 +81,7 @@ class MetraWrapper:
         return self.env.close()
 
 class DiscreteSkillTester:
-    def __init__(self, env, phi, policy, skill_embeddings, n_skills=5, device='cpu',video_dir="D:\\dionigi\\Documents\\Python scripts\\Open-Ended-Skill-Discovery\\scripts\\metra\\recs"):
+    def __init__(self, env, phi, policy, skill_embeddings, n_skills=5, device='cpu',video_dir="oesd\\baselines\\metra\\recs"):
         self.env = env
         self.phi = phi
         self.policy = policy
