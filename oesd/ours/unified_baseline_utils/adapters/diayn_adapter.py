@@ -115,8 +115,30 @@ class DIAYNAdapter(BaseAdapter):
                         new_key = k.replace("net.", "") 
                         clean_policy[new_key] = v
                     try:
+                        # --- Auto-Detect Skill Dim from Weights ---
+                        if '0.weight' in clean_policy:
+                            w_shape = clean_policy['0.weight'].shape
+                            # shape is [256, 256 + skill_dim]
+                            if len(w_shape) == 2:
+                                in_feat = w_shape[1]
+                                detected_skills = in_feat - 256
+                                
+                                if detected_skills != self.skill_dim and detected_skills > 0:
+                                    print(f"[DIAYNAdapter] MISMATCH: Config has {self.skill_dim} skills, but Checkpoint has {detected_skills}.")
+                                    print(f"[DIAYNAdapter] >> Re-initializing Agent with {detected_skills} skills to match checkpoint.")
+                                    
+                                    self.skill_dim = detected_skills
+                                    self.set_skill(0)
+                                    self.model = LegacyAgent(action_dim=action_dim, skill_dim=self.skill_dim)
+                                    self.model.to(self.device)
+                                    
+                                    # Re-load encoder since we just wiped the model
+                                    if 'encoder' in checkpoint:
+                                        self.model.encoder.load_state_dict(checkpoint['encoder'])
+                                        print(" - Encoder re-loaded after agent reset.")
+
                         self.model.actor.load_state_dict(clean_policy)
-                        print(" - Actor (Policy) loaded (fixed 'net.' keys).")
+                        print(f" - Actor (Policy) loaded (fixed 'net.' keys). Skills={self.skill_dim}")
                     except Exception as e:
                         print(f" - Error loading actor: {e}")
                         import traceback
