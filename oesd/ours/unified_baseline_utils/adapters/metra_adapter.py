@@ -111,15 +111,19 @@ class MetraAdapter(BaseAdapter):
 
     def process_obs(self, obs, env):
 
+        image = obs["image"].astype(np.float32)
+
         if isinstance(obs, dict):
             if 'agent_pos' in obs:
-                return np.array(obs['agent_pos'], dtype=np.float32)
+                agent_position = np.array(obs['agent_pos'], dtype=np.float32)
             elif 'observation' in obs and hasattr(obs['observation'], 'agent_pos'):
-                print("METRAAA PROC OBS shape:", np.array(obs['observation'].agent_pos, dtype=np.float32))
-                return np.array(obs['observation'].agent_pos, dtype=np.float32)
+                agent_position = np.array(obs['observation'].agent_pos, dtype=np.float32)
+            else:
+                agent_position = np.array([0, 0], dtype=np.float32)
         
-        # Last resort: return zeros or raise error
-        print("Warning: Could not extract agent position, returning zeros")
-        return np.array([0, 0], dtype=np.float32)
-        
+        return np.concatenate([
+            image.flatten(),  
+            agent_position
+        ], axis=0)
+
         # returned SHAPE: (147,)

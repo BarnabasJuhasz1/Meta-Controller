@@ -40,11 +40,9 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
     NEVER return tuples.
     """
 
-    algo_name = cfg.algo_name.lower()
-
-    if "lsd" in algo_name:
+    if "lsd" in cfg.algo_name.lower():
         adapter = LSDAdapter(
-            algo_name=algo_name,
+            algo_name=cfg.algo_name,
             algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
@@ -52,9 +50,9 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
             skill_registry=skill_registry
         )
         return adapter
-    elif "rsd" in algo_name:
+    elif "rsd" in cfg.algo_name.lower():
         adapter = RSDAdapter(
-            algo_name=algo_name,
+            algo_name=cfg.algo_name,
             algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
@@ -63,9 +61,9 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
         )
         return adapter
  
-    elif "diayn" in algo_name:        
+    elif "diayn" in cfg.algo_name.lower():        
         adapter = DIAYNAdapter(
-            algo_name=algo_name,
+            algo_name=cfg.algo_name,
             algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
@@ -75,9 +73,9 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
         )
         return adapter
     
-    elif algo_name == "dads":
+    elif "dads" in cfg.algo_name.lower():
         adapter = DADSAdapter(
-            algo_name=algo_name,
+            algo_name=cfg.algo_name,
             algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,
@@ -86,9 +84,9 @@ def load_model_from_config(cfg: ModelConfig, skill_registry: SkillRegistry = Non
             skill_registry=skill_registry,
         )
         return adapter
-    elif algo_name == "metra":
+    elif "metra" in cfg.algo_name.lower():
         adapter = MetraAdapter(
-            algo_name=algo_name,
+            algo_name=cfg.algo_name,
             algo_color=cfg.algo_color,
             ckpt_path=cfg.checkpoint_path,
             action_dim=cfg.action_dim,

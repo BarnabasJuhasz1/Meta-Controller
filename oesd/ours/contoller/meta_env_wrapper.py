@@ -128,17 +128,6 @@ class MetaControllerEnv(gym.Env):
         self.current_local_skill = -1
         self.current_step_in_skill = 0
         
-        self._last_raw_obs = obs
-        
-        # Reset reward flags
-        self._rewarded_key = False
-        self._rewarded_door = False
-        
-        # Reset tracking
-        self.current_algo = "None"
-        self.current_global_skill = -1
-        self.current_local_skill = -1
-        self.current_step_in_skill = 0
         
         info = {}
         return self._process_obs(obs), info
@@ -162,7 +151,7 @@ class MetaControllerEnv(gym.Env):
         
         if self.current_algo == "None":
             # return self._process_obs_for_meta_controller(obs)
-            return self.model_interfaces['rsd'].process_obs(obs, self._env)
+            return self.model_interfaces['RSD'].process_obs(obs, self._env)
 
         processed_obs = self.model_interfaces[self.current_algo].process_obs(obs, self._env)
 
@@ -195,6 +184,7 @@ class MetaControllerEnv(gym.Env):
         self.current_step_in_skill = 0
 
         # --- The Scheduler Loop  ---
+        frames = []
         for step_i in range(self.skill_duration):
             self.current_step_in_skill = step_i + 1
             
@@ -207,7 +197,7 @@ class MetaControllerEnv(gym.Env):
             # We use the current observation (self.last_obs) 
             # primitive_action = self.registry.get_action(action, self.last_obs)
             with torch.no_grad():
-                if self.current_algo == "diayn":
+                if self.current_algo == "DIAYN":
                     primitive_action = self.model_interfaces[self.current_algo].get_action(self._last_raw_obs, z_vector)
                 else:
                     primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
@@ -262,7 +252,9 @@ class MetaControllerEnv(gym.Env):
                 # Use our custom render to update title
                 frame = self.render()
                 if frame is not None:
-                    info['render'] = frame.transpose(2, 0, 1)
+                    # Capture every frame
+                    # Store as CHW for consistency with previous single-frame behavior
+                    frames.append(frame.transpose(2, 0, 1))
 
             self._last_raw_obs = obs # Update for next micro-step
             
@@ -272,6 +264,9 @@ class MetaControllerEnv(gym.Env):
             if terminated or truncated:
                 break
             
+        # Attach collected frames to the final info dict
+        if render and frames:
+            info['render'] = frames
             
         # Return the aggregated experience to the Meta-Controller
         return self._process_obs(self._last_raw_obs), total_reward, terminated, truncated, info

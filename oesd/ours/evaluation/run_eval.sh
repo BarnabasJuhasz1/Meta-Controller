@@ -9,13 +9,16 @@
 #89600 -> 12% on 50 episodes (8 skills used)
 # MODEL_PATH="ours/train_results/checkpoints/controller_test3/controller_89600_steps.zip"
 
-MODEL_DIR="ours/train_results/checkpoints/test4"
+# MODEL_DIR="ours/train_results/checkpoints/test4"
+MODEL_PATH_OR_DIR="ours/train_results/checkpoints/test4/_57600_steps.zip"
 
 # Assuming python is in path, otherwise use absolute path
 python ours/evaluation/eval.py \
     --env_name minigrid \
     --skill_count_per_algo 8 \
     --config_path "ours/configs/config1.py" \
-    --model_dir "$MODEL_DIR" \
+    --model_path_or_dir "$MODEL_PATH_OR_DIR" \
     --num_episodes 25 \
-    --output_dir "ours/evaluation/results/test4"
+    --output_dir "ours/evaluation/results/testing" \
+    --seed 1 \
+    # --render

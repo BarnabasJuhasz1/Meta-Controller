@@ -10,7 +10,7 @@ class SkillRegistry:
         # list of algorithms
         self.algos = []
         # Note: mapping from skill to algo is done by dividing with skill_count
-
+    
     def register_baseline(self, algo:str, skill_list):
         """
         Registers a model with the given skill vectors
@@ -19,8 +19,8 @@ class SkillRegistry:
         assert len(skill_list) == self.skill_count_per_algo, f"Skill list must have {self.skill_count_per_algo} skills, got {len(skill_list)}"
         
         self.bag_of_skills.extend(skill_list)
-        self.algos.append(algo)
-        print(f"Registered {algo} with skills: {skill_list}")
+        self.algos.append(algo.upper())
+        print(f"Registered {algo.upper()} with skills: {skill_list}")
 
     def get_algo_color(self, skill_idx):
         """

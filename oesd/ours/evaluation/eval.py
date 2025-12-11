@@ -3,8 +3,12 @@ import os
 import time
 import json
 import numpy as np
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import seaborn as sns
+import pandas as pd
+
 import gymnasium as gym
 from stable_baselines3 import PPO
 from collections import defaultdict, Counter
@@ -25,6 +29,7 @@ from minigrid.core.world_object import Door, Key
 
 import re
 
+
 # This key function finds all sequences of digits and converts them to integers
 def natural_key(path):
     # This turns "model_100_.zip" into the list ['model_', 100, '_.zip']
@@ -36,8 +41,8 @@ def parse_args():
     parser.add_argument("--skill_count_per_algo", type=int, default=10)
     parser.add_argument("--skill_duration", type=int, default=10)
     parser.add_argument("--config_path", type=str, default="oesd/ours/configs/config1.py")
-    parser.add_argument("--model_dir", type=str, required=True, help="Path to the directory containing trained meta-controller model .zip files")
-    # parser.add_argument("--model_path", type=str, required=True, help="Path to the trained meta-controller model .zip file")
+    parser.add_argument("--model_path_or_dir", type=str, required=True, help="Path to the directory containing trained meta-controller model .zip files")
+    # parser.add_argument("--model_path", type=str, required=False, help="Path to the trained meta-controller model .zip file")
     parser.add_argument("--num_episodes", type=int, default=10, help="Number of episodes to evaluate")
     parser.add_argument("--output_dir", type=str, default="oesd/ours/evaluation/results", help="Directory to save results")
     parser.add_argument("--render", action="store_true", help="Render the environment during evaluation")
@@ -47,7 +52,7 @@ def parse_args():
 def main(args):
     # 1. Setup
     os.makedirs(args.output_dir, exist_ok=True)
-    
+
     print(f"Loading Configuration from {args.config_path}...")
     skill_registry = SkillRegistry(args.skill_count_per_algo)
     config = load_config(args.config_path)
@@ -67,17 +72,25 @@ def main(args):
         render_mode=render_mode
     )
     
-    print(f"Loading Meta-Controller from {args.model_dir}...")
+    print(f"Loading Meta-Controller from {args.model_path_or_dir}...")
 
-    # for zip_file in sorted(Path(args.model_dir).rglob('*.zip')):
-    for zip_file in sorted(Path(args.model_dir).rglob('*.zip'), key=natural_key):
+    path = Path(args.model_path_or_dir)
+    # Check if the input is a specific file or a directory
+    if path.is_file() and path.suffix == '.zip':
+        # If it's a file, create a list with just that one file
+        zip_files = [path]
+    else:
+        # If it's a directory, search for all zip files inside
+        zip_files = sorted(path.rglob('*.zip'), key=natural_key)
+
+    for zip_file in zip_files:
         # load the model
         model = PPO.load(zip_file, device="cpu")
         # get the file name without extension
         filename = zip_file.stem
         # evaluate the model
         evaluate(args, meta_env, model, skill_registry, model_interfaces, filename)
-
+        
     make_gif(args.output_dir)
     
     print(f"\nGIF saved to {args.output_dir}/skill_usage_over_time.gif")
@@ -101,7 +114,13 @@ def evaluate(args, meta_env, model, skill_registry, model_interfaces, filename):
         
         # Tracking per episode
         skill_history = []  # List of (step, skill_id)
+        frames = [] # List to store frames for GIF
         
+        # Capture initial frame
+        initial_frame = meta_env.render()
+        if initial_frame is not None:
+            frames.append(Image.fromarray(initial_frame))
+
         while not (terminated or truncated):
             action, _states = model.predict(obs, deterministic=True)
             skill_id = int(action)
@@ -114,8 +133,23 @@ def evaluate(args, meta_env, model, skill_registry, model_interfaces, filename):
                 "algo": meta_env.registry.get_algo_and_skill_from_skill_idx(skill_id)[0]
             })
             
-            # Step
-            obs, reward, terminated, truncated, info = meta_env.step(action, render=args.render)
+            # Step - Force render=True to capture frames
+            obs, reward, terminated, truncated, info = meta_env.step(action, render=True)
+            
+            # Capture frame from info (it's in C, H, W format from wrapper)
+            if 'render' in info:
+                rendered_frames = info['render']
+                # If it's a single frame (old behavior or just in case), make it a list
+                if not isinstance(rendered_frames, list):
+                    rendered_frames = [rendered_frames]
+                
+                for frame_chw in rendered_frames:
+                    # Transpose back to H, W, C for PIL
+                    frame_arr = frame_chw.transpose(1, 2, 0)
+                    # Ensure it's uint8
+                    if frame_arr.dtype != np.uint8:
+                        frame_arr = frame_arr.astype(np.uint8)
+                    frames.append(Image.fromarray(frame_arr))
             
             ep_reward += reward
             step_count += 1
@@ -126,6 +160,18 @@ def evaluate(args, meta_env, model, skill_registry, model_interfaces, filename):
         # Or just rely on reward. For DoorKey, reward > 0 typically means solved (reward = 1 - 0.9*(step/max_steps))
         is_success = ep_reward > 0 
         
+        if is_success:
+            gif_path = os.path.join(args.output_dir, f"{filename}_ep{ep+1}_success.gif")
+            if frames:
+                frames[0].save(
+                    gif_path, 
+                    save_all=True, 
+                    append_images=frames[1:], 
+                    duration=25, # 100ms per frame = 10fps
+                    loop=0
+                )
+            print(f"Episode {ep+1} Solved! GIF saved to {gif_path}")
+
         episode_metrics.append({
             "episode": ep,
             "reward": float(ep_reward),
@@ -184,23 +230,24 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
     # --- Visualizations ---
     
     # 1. Skill Usage Histogram
-    plt.figure(figsize=(10, 6))
-    # Fill gaps for skills not used
-    x = range(len(registry.bag_of_skills))
-    y = [skill_counts.get(i, 0) for i in x]
-    colors = [model_interfaces[registry.get_algo_from_skill_idx(i)].algo_color for i in x]
+    # plt.figure(figsize=(10, 6))
+    # # Fill gaps for skills not used
+    # x = range(len(registry.bag_of_skills))
+    # y = [skill_counts.get(i, 0) for i in x]
+    # colors = [model_interfaces[registry.get_algo_from_skill_idx(i)].algo_color for i in x]
 
-    # Create legend patches
-    handles = [mpatches.Patch(color=model_interfaces[i].algo_color, label=model_interfaces[i].algo_name) for i in model_interfaces.keys()]
+    # # Create legend patches
+    # handles = [mpatches.Patch(color=model_interfaces[i].algo_color, label=model_interfaces[i].algo_name) for i in model_interfaces.keys()]
 
-    plt.bar(x, y, color=colors, edgecolor='black')
+    # plt.bar(x, y, color=colors, edgecolor='black', linewidth=1)
     
-    plt.xlabel("Global Skill ID")
-    plt.ylabel("Frequency")
-    plt.legend(handles=handles, loc="upper right")
-    plt.title(f"Skill Usage Distribution (Steps: {filename}, Succ. Rate: {success_rate:.2%}, Num. of Skills: {unique_skills_count})")
-    plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
-    plt.close()
+    # plt.xlabel("Global Skill ID")
+    # plt.ylabel("Frequency")
+    # plt.legend(handles=handles, loc="upper right")
+    # plt.title(f"Skill Usage Distribution (Steps: {filename}, Succ. Rate: {success_rate:.2%}, Num. of Skills: {unique_skills_count})")
+    # plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
+    # plt.close()
+    make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skill_counts, success_rate, unique_skills_count)
     
     # 2. HRL Timeline (for the first 5 episodes or best success)
     # Let's plot the first successful one and the first failed one if available, or just first few.
@@ -284,6 +331,63 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
     
     print(f"\nReport saved to {report_path}")
 
+def make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skill_counts, success_rate, unique_skills_count):
+
+    # 1. Skill Usage Histogram
+    plt.figure(figsize=(10, 6))
+
+    # --- Data Preparation for Seaborn ---
+    # We build a list of dictionaries to convert into a DataFrame
+    data = []
+    palette_map = {}
+
+    for i in range(len(registry.bag_of_skills)):
+        # Retrieve algorithm info for this skill index
+        algo_idx = registry.get_algo_from_skill_idx(i)
+        interface = model_interfaces[algo_idx]
+        
+        # Store data for the plot
+        data.append({
+            "Global Skill ID": i,
+            # "Frequency": skill_counts.get(i, 0),
+            "Frequency": np.random.randint(0, 100),
+            "Algorithm": interface.algo_name
+        })
+        
+        # Build the color palette dict (Name -> Color)
+        palette_map[interface.algo_name] = interface.algo_color
+
+    df = pd.DataFrame(data)
+
+    # --- Plotting ---
+    ax = sns.barplot(
+        data=df,
+        x="Global Skill ID",
+        y="Frequency",
+        hue="Algorithm",      # Automatically colors bars based on Algorithm
+        palette=palette_map,  # Uses your specific colors
+        # edgecolor="black",
+        # linewidth=0.5,
+        edgecolor=None,
+        linewidth=0,
+        dodge=False,           # Keeps bars full width (prevents thinning when using hue)
+        alpha=1.0
+    )
+
+    # --- Formatting ---
+    # If you have many skills, the x-labels might get crowded. 
+    # This helps keep the x-axis readable (optional, depends on skill count):
+    if len(df) > 20:
+        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+    plt.title(f"Skill Usage Distribution (Steps: {filename}, Succ. Rate: {success_rate:.2%}, Num. of Skills: {unique_skills_count})")
+
+    # Move legend to upper right to match original placement
+    plt.legend(loc="upper right", title="Algorithm")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
+    plt.close()
 
 def make_gif(frame_folder):
     # 1. Create the file pattern (e.g., all pngs starting with "frame_")
