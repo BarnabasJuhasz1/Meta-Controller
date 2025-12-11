@@ -27,7 +27,7 @@ class ModelManager:
 
 
 class PhiNet1(nn.Module):
-    def __init__(self, state_dim=2, latent_dim=2, hidden_dim=256, scale=100.0):
+    def __init__(self, state_dim=147, latent_dim=2, hidden_dim=256, scale=100.0):
         super().__init__()
         self.scale = scale
         self.net = nn.Sequential(
@@ -43,7 +43,7 @@ class PhiNet1(nn.Module):
 
 
 class MultiSkillPolicyNet1(nn.Module):
-    def __init__(self, state_dim=2, n_skills=5, n_actions=4, hidden_dim=1024):
+    def __init__(self, state_dim=147, n_skills=5, n_actions=4, hidden_dim=1024):
 
         super().__init__()
         self.state_dim = state_dim
@@ -84,7 +84,7 @@ class MultiSkillPolicyNet1(nn.Module):
 ########### 2
 
 class PhiNet2(nn.Module):
-    def __init__(self, state_dim=2, latent_dim=2, hidden_dim=256, scale=100.0):
+    def __init__(self, state_dim=147, latent_dim=2, hidden_dim=256, scale=100.0):
         super().__init__()
         self.scale = scale
         self.net = nn.Sequential(
@@ -100,7 +100,7 @@ class PhiNet2(nn.Module):
 
 
 class MultiSkillPolicyNet2(nn.Module):
-    def __init__(self, state_dim=2, n_skills=5, n_actions=4, hidden_dim=1024):
+    def __init__(self, state_dim=147, n_skills=5, n_actions=4, hidden_dim=1024):
         super().__init__()
         self.state_dim = state_dim
         self.n_skills = n_skills
@@ -140,7 +140,7 @@ class MultiSkillPolicyNet2(nn.Module):
 
 
 class PhiNet3(nn.Module):
-    def __init__(self, state_dim=2, latent_dim=2, hidden_dim=256, scale=100.0):
+    def __init__(self, state_dim=147, latent_dim=2, hidden_dim=256, scale=100.0):
         super().__init__()
         self.scale = scale
         self.net = nn.Sequential(
@@ -156,7 +156,7 @@ class PhiNet3(nn.Module):
 
 
 class MultiSkillQNetwork(nn.Module):
-    def __init__(self, state_dim=2, n_skills=5, n_actions=4, hidden_dim=1024):
+    def __init__(self, state_dim=147, n_skills=5, n_actions=4, hidden_dim=1024):
         super().__init__()
         self.state_dim = state_dim
         self.n_skills = n_skills

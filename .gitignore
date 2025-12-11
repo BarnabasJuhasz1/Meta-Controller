@@ -62,3 +62,6 @@ oesd/ours/evaluation/results/
 # Snellius job outputs
 *.out
 *.job
+
+oesd/baselines/metra/recs/*
+oesd/baselines/metra/models/*

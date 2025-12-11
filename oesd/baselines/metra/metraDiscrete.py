@@ -251,12 +251,12 @@ class DiscreteSkillMetra:
                       f"buffer={len(self.buffer)}")
     
 
-    def save_models(self, path_prefix="D:\\dionigi\\Documents\\Python scripts\\Open-Ended-Skill-Discovery\\scripts\\metra\\models"):
+    def save_models(self, path_prefix="oesd\\baselines\\metra\\models\\"):
         torch.save(self.phi.state_dict(), f"{path_prefix}phi.pth")
         torch.save(self.policy.state_dict(), f"{path_prefix}policy.pth")
         torch.save(self.skill_embeddings.state_dict(), f"{path_prefix}skillEmbeddings.pth")
     
-    def load_models(self, path_prefix="D:\\dionigi\\Documents\\Python scripts\\Open-Ended-Skill-Discovery\\scripts\\metra\\models"):
+    def load_models(self, path_prefix="oesd\\baselines\\metra\\models\\"):
         self.phi.load_state_dict(torch.load(f"{path_prefix}phi.pth", map_location=self.device))
         self.policy.load_state_dict(torch.load(f"{path_prefix}policy.pth", map_location=self.device))
         self.skill_embeddings.load_state_dict(torch.load(f"{path_prefix}skillEmbeddings.pth", map_location=self.device))
