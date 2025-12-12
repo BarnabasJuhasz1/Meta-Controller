@@ -63,7 +63,7 @@ model_cfgs.append(ModelConfig(
     algo_name="METRA",
     algo_color=COLORS["blue"],
     checkpoint_path=os.path.join(CHECKPOINT_PATH, "METRA/"),
-    action_dim=ACTION_DIM,
+    action_dim=7,
     skill_dim=SKILL_DIM,
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "METRA")},
 ))

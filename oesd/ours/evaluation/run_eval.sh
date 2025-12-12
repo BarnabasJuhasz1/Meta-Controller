@@ -10,7 +10,7 @@
 # MODEL_PATH="ours/train_results/checkpoints/controller_test3/controller_89600_steps.zip"
 
 # MODEL_DIR="ours/train_results/checkpoints/test4"
-MODEL_PATH_OR_DIR="ours/train_results/checkpoints/test4/_57600_steps.zip"
+MODEL_PATH_OR_DIR="ours/train_results/checkpoints/test6"
 
 # Assuming python is in path, otherwise use absolute path
 python ours/evaluation/eval.py \
@@ -19,6 +19,6 @@ python ours/evaluation/eval.py \
     --config_path "ours/configs/config1.py" \
     --model_path_or_dir "$MODEL_PATH_OR_DIR" \
     --num_episodes 25 \
-    --output_dir "ours/evaluation/results/testing" \
+    --output_dir "ours/evaluation/results/test6" \
     --seed 1 \
     # --render

@@ -86,6 +86,8 @@ class MetraAdapter(BaseAdapter):
         skill_z: vector from skill_registry (METRA skill embedding)
         deterministic: ignored (METRA uses discrete Q-policy)
         """
+        # CUT THE OBS TO THE SHAPE OF (147,) AS LSD EXPECTS IT
+        obs = obs[:147]
 
         # Ensure skill_z comes from registry
         assert self.skill_registry.does_skill_belong_to_algo(self.algo_name, skill_z), f"skill_z must be in the list of skills for this algo ({self.algo_name})!"

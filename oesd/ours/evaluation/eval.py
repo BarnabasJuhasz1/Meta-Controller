@@ -349,8 +349,8 @@ def make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skil
         # Store data for the plot
         data.append({
             "Global Skill ID": i,
-            # "Frequency": skill_counts.get(i, 0),
-            "Frequency": np.random.randint(0, 100),
+            "Frequency": skill_counts.get(i, 0),
+            # "Frequency": np.random.randint(0, 100),
             "Algorithm": interface.algo_name
         })
         
