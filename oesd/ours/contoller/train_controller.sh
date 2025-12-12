@@ -11,7 +11,7 @@ python ours/contoller/controller.py \
     --gamma 0.99 \
     --verbose 1 \
     --tensorboard_log "ours/train_results/logs/" \
-    --save_path "ours/train_results/checkpoints/test6" \
+    --save_path "ours/train_results/checkpoints/test7" \
     --config_path "ours/configs/config1.py" \
     --checkpoint_freq 100 \
-    # --render-mode "human"
+    --render-mode "human"

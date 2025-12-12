@@ -102,12 +102,13 @@ class BaselineMiniGridEnv(gym.Env):
         # render_mode="human",
         # render_mode=None,
         env_name="minigrid",
+        seed=0,
     ):
         super().__init__()
         if env_name == "minigrid":
-            self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode)
+            self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode, seed=seed)
         elif env_name == "minigrid_random_key":
-            self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode, key_pos='random')
+            self._env = _SimpleMiniGrid(size=size, max_steps=max_steps, render_mode=render_mode, key_pos='random', seed=seed)
         elif env_name == "minigrid_small":
             # DoorKeyEnv-5x5 (there is also size 6, 8, and 16)
             self._env = DoorKeyEnv(size=8, max_steps=max_steps, render_mode=render_mode)
@@ -213,7 +214,7 @@ class BaselineMiniGridEnv(gym.Env):
         return int(np.argmax(action))
 
     def reset(self, **kwargs):
-        result = self._env.reset(**kwargs)
+        result = self._env.reset(**kwargs, seed=5)
         if isinstance(result, tuple):
             obs, _ = result
         else:

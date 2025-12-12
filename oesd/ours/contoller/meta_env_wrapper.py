@@ -53,14 +53,14 @@ class MetaControllerEnv(gym.Env):
         self.current_step_in_skill = 0
         self.render_mode = render_mode
 
-        # self._discrete_actions = [
-        #     self._env.actions.forward,
-        #     self._env.actions.left,
-        #     self._env.actions.right,
-        #     self._env.actions.pickup,
-        #     self._env.actions.drop,
-        #     self._env.actions.toggle,
-        # ]
+        self._discrete_actions = [
+            self._env.actions.forward,
+            self._env.actions.left,
+            self._env.actions.right,
+            self._env.actions.pickup,
+            self._env.actions.drop,
+            self._env.actions.toggle,
+        ]
         # self._num_actions = len(self._discrete_actions)
         # self.action_space = spaces.Box(
         #     low=-action_scale,
@@ -135,8 +135,6 @@ class MetaControllerEnv(gym.Env):
     def _map_action(self, action):
         if isinstance(action, int):
             return action
-        if isinstance(action, int):
-            return action
         if action.ndim == 0:
             return int(action)
         return int(np.argmax(action))
@@ -201,7 +199,9 @@ class MetaControllerEnv(gym.Env):
                     primitive_action = self.model_interfaces[self.current_algo].get_action(self._last_raw_obs, z_vector)
                 else:
                     primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
-            
+                    if self.current_algo == "RSD":
+                        print(f"RSD IS USED WITH PARAMS: {self.current_local_skill}, {z_vector}, action: {primitive_action}")
+
             # Update title before step if human rendering, because minigrid might render in step
             if self.render_mode == "human":
                 self._update_window_title()
@@ -213,7 +213,11 @@ class MetaControllerEnv(gym.Env):
             # Capture agent position before the step
             prev_pos = self._env.agent_pos
 
-            mapped_action = self._map_action(primitive_action)
+            if self.current_algo == "RSD":
+                mapped_action = self._discrete_actions[self._map_action(np.asarray(primitive_action))]
+            else:
+                mapped_action = self._map_action(primitive_action)
+            
             obs, reward, terminated, truncated, info = self._env.step(mapped_action)
 
             # Check if we are carrying a key AFTER the step

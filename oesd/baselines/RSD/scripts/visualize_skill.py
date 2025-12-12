@@ -9,6 +9,36 @@ import os
 import multiprocessing as mp
 from PIL import Image, ImageDraw, ImageFont
 
+
+import oesd
+
+# --- STEP 1: Define Paths ---
+oesd_root = os.path.dirname(oesd.__file__)
+garage_src_path = os.path.join(oesd_root, "baselines", "RSD", "garaged", "src")
+rsd_path = os.path.join(oesd_root, "baselines", "RSD")
+
+# --- STEP 2: Update sys.path ---
+# Allow Python to find 'garage'
+if garage_src_path not in sys.path:
+    sys.path.append(garage_src_path)
+
+# Allow Python to find 'global_context' AND 'dowel_wrapper'
+if rsd_path not in sys.path:
+    sys.path.append(rsd_path)
+
+# --- STEP 3: Handle dowel_wrapper assertion ---
+# 1. Unload dowel if it exists (to satisfy the wrapper's assertion)
+if 'dowel' in sys.modules:
+    del sys.modules['dowel']
+
+# 2. CHANGE IS HERE: Import it using the SHORT name.
+#    This works because 'rsd_path' is in sys.path now.
+#    This registers 'dowel_wrapper' in sys.modules so the checkpoint finds it.
+import dowel_wrapper
+
+
+
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tests.make_env import make_env
@@ -66,6 +96,7 @@ def get_option_vector(k, dim_option, discrete, unit_length=False):
     return v
 
 
+
 def save_frames_as_gif(frames, path, fps=30):
     if not frames:
         return
@@ -94,7 +125,7 @@ def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='min
     args = Namespace(env=env_name, max_path_length=max_steps, normalizer_type='off', frame_stack=None)
     
     render_mode = 'rgb_array' if save_gif else 'human'
-    env = make_env(args, max_path_length=max_steps, render_mode=render_mode)
+    env = make_env(args, max_path_length=max_steps, render_mode=render_mode, seed=5)
 
     if not save_gif:
         # Force window title if supported
@@ -172,6 +203,8 @@ def visualize_skill(checkpoint_dir, epoch, skill_k, max_steps=100, env_name='min
             with torch.no_grad():
                 dist, _ = option_policy(concat_obs)
                 action = dist.mean.cpu().numpy()[0]
+                print(f"RSD IS USED WITH PARAMS: {skill_k}, {option}, action: {action}")
+
 
             obs, reward, done, info = env.step(action)
             step_count += 1
@@ -263,6 +296,7 @@ def main():
     parser.add_argument('--gif_dir', type=str, default='./gifs', help='Directory to save GIFs')
     parser.add_argument('--fps', type=int, default=30, help='Frames per second for the GIF')
     parser.add_argument('--repeat', type=int, default=1, help='Number of times to repeat the visualization (re-initializing env)')
+    # parser.add_argument('--seed', type=int, default=0, help='Random seed for the environment')
     args = parser.parse_args()
 
     for epoch in args.epoch:

@@ -5,7 +5,7 @@ import sys
 import os
 
 
-def make_env(args, max_path_length, render_mode=None):
+def make_env(args, max_path_length, render_mode=None, seed=0):
     if args.env == 'maze':
         from envs.maze_env import MazeEnv
         env = MazeEnv(

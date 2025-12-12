@@ -24,18 +24,18 @@
 
 
 
+# --checkpoint_dir /home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/exp/RSD_small_exp/mini_4d_3P_img_dir_carry_original_Csd042_1764514102_minigrid_small_RSD \
 
-
-python scripts/visualize_skill.py \
-    --checkpoint_dir /home/juhasz/Desktop/UZH/Reinforcement_Learning/Project_31/Open-Ended-Skill-Discovery/baselines/RSD/exp/RSD_small_exp/mini_4d_3P_img_dir_carry_original_Csd042_1764514102_minigrid_small_RSD \
-    --epoch 75 100 125 150 175 200 225 250 \
+python baselines/RSD/scripts/visualize_skill.py \
+    --checkpoint_dir baseline_checkpoints/RSD/4D_3P_img_dir_carry_orig_C/ \
+    --epoch 175 \
     --max_steps 50 \
     --env minigrid_small \
     --save_gif \
     --fps 8 \
-    # --repeat 20 \
-    # --only_skill_index 4 \
-
+    --repeat 20 \
+    --only_skill_index 6 
+    # --seed 5
 
 #--env minigrid_random_key \
 

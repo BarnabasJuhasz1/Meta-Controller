@@ -87,6 +87,7 @@ class RSDAdapter(BaseAdapter):
 
         self.discrete = self.option_policy_ckpt['discrete']
         self.dim_option = self.option_policy_ckpt['dim_option']
+        # self.dim_option = 8
         
         skill_list = [self.init_skill_vector(i, unit_length=True) for i in range(skill_registry.skill_count_per_algo)]
         # register the skills with the skill registry
@@ -98,7 +99,7 @@ class RSDAdapter(BaseAdapter):
         self.option_policy.eval()
         self.option_policy = self.option_policy.to(self.device)
 
-    def init_skill_vector(self, k, unit_length=False):
+    def init_skill_vector(self, k, unit_length=True):
         """
         Helper function to initialize skill vectors
         """
@@ -135,8 +136,11 @@ class RSDAdapter(BaseAdapter):
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         skill_tensor = torch.from_numpy(skill_z).float().unsqueeze(0).to(self.device)
 
+
         with torch.no_grad():
 
+            obs_tensor = self.option_policy.process_observations(obs_tensor)
+            concat_obs = torch.cat([obs_tensor, skill_tensor], dim=1)
             # I disabled processing inside so we process unified in the env wrapper
             # if hasattr(self.option_policy, 'process_observations'):
             #     # print("observations ARE processed inside get_action")
@@ -145,7 +149,6 @@ class RSDAdapter(BaseAdapter):
             #     # print("observations are NOT processed inside get_action")
             #     processed_obs = obs_tensor
             # concat_obs = torch.cat([processed_obs, skill_tensor], dim=1)
-            concat_obs = torch.cat([obs_tensor, skill_tensor], dim=1)
 
             with torch.no_grad():
                 dist, _ = self.option_policy(concat_obs)

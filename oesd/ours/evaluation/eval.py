@@ -512,7 +512,7 @@ def plot_training_progress(metrics_data, output_dir):
     labels = [l.get_label() for l in lines]
     ax.legend(lines, labels, loc='upper left')
 
-    plt.title('Controller Training Progress: Success & Skill Discovery')
+    plt.title('Controller Training Progress: Success & Skill Usage')
     plt.tight_layout()
     #plt.show()
         
