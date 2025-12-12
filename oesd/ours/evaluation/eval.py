@@ -7,7 +7,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
+import seaborn as sns
 import pandas as pd
+import matplotlib.collections as mcoll
+
+COLORS = {
+    "red": "#E22B34",
+    "gold": "#FFD300",
+    "pink": "#FF5CC0",
+    "blue": "#438ADC",
+    "green": "#35C05E",
+}
+
+ALGO_COLORS = {
+    "diayn": COLORS["red"],
+    "dads": COLORS["gold"],
+    "metra": COLORS["blue"],
+    "rsd": COLORS["green"],
+    "lsd": COLORS["pink"],
+}
 
 import gymnasium as gym
 from stable_baselines3 import PPO
@@ -52,6 +70,7 @@ def parse_args():
 def main(args):
     # 1. Setup
     os.makedirs(args.output_dir, exist_ok=True)
+    metrics_data = []
 
     print(f"Loading Configuration from {args.config_path}...")
     skill_registry = SkillRegistry(args.skill_count_per_algo)
@@ -89,7 +108,30 @@ def main(args):
         # get the file name without extension
         filename = zip_file.stem
         # evaluate the model
-        evaluate(args, meta_env, model, skill_registry, model_interfaces, filename)
+        analysis_results = evaluate(args, meta_env, model, skill_registry, model_interfaces, filename)
+        
+        # Parse step count from filename for the aggregate plot
+        # Expecting something like "rl_model_3200_steps"
+        step_match = re.search(r'(\d+)_steps', filename)
+        if step_match:
+            step_count = int(step_match.group(1))
+        else:
+            # Fallback if naming convention differs
+            # Try finding any large number
+            nums = re.findall(r'\d+', filename)
+            if nums:
+                step_count = int(nums[-1])
+            else:
+                step_count = 0 # Should not happen with standard names
+
+        metrics_data.append({
+            "steps": step_count,
+            "success_rate": analysis_results["success_rate"],
+            "active_skill_ratio": analysis_results["active_skill_ratio"],
+            "unique_skills": analysis_results["unique_skills_count"]
+        })
+        
+    plot_training_progress(metrics_data, args.output_dir)
         
     make_gif(args.output_dir)
     
@@ -186,7 +228,8 @@ def evaluate(args, meta_env, model, skill_registry, model_interfaces, filename):
         print(f"Episode {ep+1}: Reward={ep_reward:.4f}, Steps={step_count}, Success={is_success}")
 
     # 3. Analyze Results
-    analyze_and_visualize(episode_metrics, args.output_dir, skill_registry, model_interfaces, filename)
+    # 3. Analyze Results
+    return analyze_and_visualize(episode_metrics, args.output_dir, skill_registry, model_interfaces, filename)
 
 
 def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filename):
@@ -249,50 +292,50 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
     # plt.close()
     make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skill_counts, success_rate, unique_skills_count)
     
-    # 2. HRL Timeline (for the first 5 episodes or best success)
-    # Let's plot the first successful one and the first failed one if available, or just first few.
+    # 2. HRL Timeline (Color-coded by Algorithm)
     num_timelines_to_plot = min(3, len(metrics))
-    
-    fig, axes = plt.subplots(num_timelines_to_plot, 1, figsize=(12, 4 * num_timelines_to_plot), sharex=True)
-    if num_timelines_to_plot == 1:
-        axes = [axes]
-        
-    for i in range(num_timelines_to_plot):
-        ax = axes[i]
-        ep_data = metrics[i]
-        history = ep_data["skill_history"]
-        
-        # Plot bars
-        # X axis: timesteps
-        # Y axis: Skill ID
-        
-        # We can use broken_barh for this
-        # [(start, width), (start, width)...]
-        
-        # We also want to color code by Algorithm if possible, or just distinct colors for skills
-        
-        # Simplify: Y-axis is Skill ID, X-axis is time. 
-        # Plot points or short lines?
-        # Better: Step plot or Gantt chart style
-        
-        times = []
-        skills = []
-        for h in history:
-            times.append(h["step_start"])
-            skills.append(h["skill_id"])
-            # Add end point for step plot
-            times.append(h["step_end"])
-            skills.append(h["skill_id"])
+    if num_timelines_to_plot > 0:
+        fig, axes = plt.subplots(num_timelines_to_plot, 1, figsize=(12, 3 * num_timelines_to_plot), sharex=True)
+        if num_timelines_to_plot == 1:
+            axes = [axes]
             
-        ax.plot(times, skills, drawstyle="steps-post", linewidth=2, label=f"Ep {i+1}")
-        ax.set_ylabel("Skill ID")
-        ax.set_ylim(-1, len(registry.bag_of_skills))
-        ax.grid(True, alpha=0.3)
-        ax.set_title(f"Episode {i+1} Timeline (Success: {ep_data['success']}, Reward: {ep_data['reward']:.2f})")
-        
-        # Annotate algo names roughly? Maybe too cluttered.
-    
-    plt.xlabel("Timesteps")
+        for i in range(num_timelines_to_plot):
+            ax = axes[i]
+            ep_data = metrics[i]
+            history = ep_data["skill_history"]
+            
+            # Use matplotlib Collection for colorful segments
+            segments = []
+            colors = []
+            
+            # y-value (skill_id) vs x (time)
+            # Create segments of (x, y) -> (x_next, y)
+            for h in history:
+                t_start = h["step_start"]
+                t_end = h["step_end"]
+                skill_id = h["skill_id"]
+                algo_name = h["algo"]
+                
+                # We can draw a horizontal line at height = skill_id from t_start to t_end
+                segments.append([(t_start, skill_id), (t_end, skill_id)])
+                
+                # Get color
+                c = ALGO_COLORS.get(algo_name, "black")
+                colors.append(c)
+                
+            lc = mcoll.LineCollection(segments, colors=colors, linewidths=3)
+            ax.add_collection(lc)
+            
+            ax.autoscale_view()
+            ax.set_ylabel("Global Skill ID")
+            ax.set_ylim(-1, len(registry.bag_of_skills))
+            ax.grid(True, alpha=0.3)
+            ax.set_title(f"Episode {i+1} Timeline (Success: {ep_data['success']}, Reward: {ep_data['reward']:.2f})")
+            
+            # Add Legend just once on the top plot
+            if i == 0:
+                handles = [mpatches.Patch(color=color, label=algo) for algo, color in ALGO_COLORS.items()]
+                ax.legend(handles=handles, loc="upper right", title="Algorithm", ncol=len(ALGO_COLORS))
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, f"{filename}_hrl_timeline.png"))
     plt.close()
@@ -330,6 +373,12 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
         f.write(f"![Timeline]({filename}_hrl_timeline.png)\n")
     
     print(f"\nReport saved to {report_path}")
+    
+    return {
+        "success_rate": success_rate,
+        "active_skill_ratio": active_skill_ratio,
+        "unique_skills_count": unique_skills_count
+    }
 
 def make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skill_counts, success_rate, unique_skills_count):
 
@@ -407,6 +456,52 @@ def make_gif(frame_folder):
     frame_one = frames[0]
     frame_one.save(os.path.join(frame_folder, "skill_usage_over_time.gif"), format="GIF", append_images=frames[1:],
                save_all=True, duration=500, loop=0)
+
+def plot_training_progress(metrics_data, output_dir):
+    if not metrics_data:
+        print("No metrics to plot training progress.")
+        return
+
+    # Sort by steps just in case
+    metrics_data.sort(key=lambda x: x["steps"])
+    
+    steps = [m["steps"] for m in metrics_data]
+    success_rates = [m["success_rate"] for m in metrics_data]
+    skill_ratios = [m["active_skill_ratio"] for m in metrics_data]
+    
+    plt.figure(figsize=(10, 6))
+    
+    # Dual axis plot
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    
+    # Plot Success Rate
+    line1 = ax1.plot(steps, success_rates, marker='o', color='purple', linewidth=2, label='Success Rate')
+    ax1.set_xlabel('Training Steps (or Epoches)')
+    ax1.set_ylabel('Success Rate', color='purple')
+    ax1.tick_params(axis='y', labelcolor='purple')
+    ax1.set_ylim(-0.05, 1.05)
+    
+    # Plot Skill Usage
+    line2 = ax2.plot(steps, skill_ratios, marker='s', color='orange', linewidth=2, linestyle='--', label='Skill Usage %')
+    ax2.set_ylabel('Active Skill Ratio (Bag Usage)', color='orange')
+    ax2.tick_params(axis='y', labelcolor='orange')
+    ax2.set_ylim(-0.05, 1.05)
+    
+    lines = line1 + line2
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper left')
+    
+    plt.title('Controller Training Progress: Success & Skill Discovery')
+    plt.tight_layout()
+    
+    out_path = os.path.join(output_dir, "training_progress.png")
+    plt.savefig(out_path)
+    print(f"Training progress plot saved to {out_path}")
+
+    # Also save CSV for convenience
+    df = pd.DataFrame(metrics_data)
+    df.to_csv(os.path.join(output_dir, "training_metrics.csv"), index=False)
 
 if __name__ == "__main__":
     args = parse_args()
