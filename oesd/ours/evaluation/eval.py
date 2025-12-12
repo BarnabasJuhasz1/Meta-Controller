@@ -288,7 +288,7 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
     # plt.ylabel("Frequency")
     # plt.legend(handles=handles, loc="upper right")
     # plt.title(f"Skill Usage Distribution (Steps: {filename}, Succ. Rate: {success_rate:.2%}, Num. of Skills: {unique_skills_count})")
-    # plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
+    # plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.pdf"))
     # plt.close()
     make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skill_counts, success_rate, unique_skills_count)
     
@@ -337,7 +337,7 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
                 handles = [mpatches.Patch(color=color, label=algo) for algo, color in ALGO_COLORS.items()]
                 ax.legend(handles=handles, loc="upper right", title="Algorithm", ncol=len(ALGO_COLORS))
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f"{filename}_hrl_timeline.png"))
+    plt.savefig(os.path.join(output_dir, f"{filename}_hrl_timeline.pdf"))
     plt.close()
     
     # 3. Strategy Analysis (Textual)
@@ -369,8 +369,8 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
         f.write(f"- **Entropy**: {entropy:.4f}\n\n")
         f.write(f"### Strategy Analysis\n")
         f.write(f"> {analysis_text}\n\n")
-        f.write(f"![Skill Usage]({filename}_skill_usage.png)\n")
-        f.write(f"![Timeline]({filename}_hrl_timeline.png)\n")
+        f.write(f"![Skill Usage]({filename}_skill_usage.pdf)\n")
+        f.write(f"![Timeline]({filename}_hrl_timeline.pdf)\n")
     
     print(f"\nReport saved to {report_path}")
     
@@ -435,13 +435,13 @@ def make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skil
     plt.legend(loc="upper right", title="Algorithm")
 
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
+    plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.pdf"))
     plt.close()
 
 def make_gif(frame_folder):
     # 1. Create the file pattern (e.g., all pngs starting with "frame_")
-    # Change 'frame_*.png' to match your specific naming convention
-    files = glob.glob(f"{frame_folder}/*_skill_usage.png")
+    # Change 'frame_*.pdf' to match your specific naming convention
+    files = glob.glob(f"{frame_folder}/*_skill_usage.pdf")
     
     # 2. Sort the files
     # Standard python sort(). See "Handling Sorting" below if you have issues.
@@ -495,7 +495,7 @@ def plot_training_progress(metrics_data, output_dir):
     plt.title('Controller Training Progress: Success & Skill Discovery')
     plt.tight_layout()
     
-    out_path = os.path.join(output_dir, "training_progress.png")
+    out_path = os.path.join(output_dir, "training_progress.pdf")
     plt.savefig(out_path)
     print(f"Training progress plot saved to {out_path}")
 
