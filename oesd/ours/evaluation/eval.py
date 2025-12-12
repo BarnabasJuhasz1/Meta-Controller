@@ -322,6 +322,16 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
                 # Get color
                 c = ALGO_COLORS.get(algo_name, "black")
                 colors.append(c)
+
+                # Vertical connection to next segment
+                if i < len(history) - 1:
+                    next_h = history[i+1]
+                    next_start = next_h["step_start"]
+                    next_skill = next_h["skill_id"]
+                    # If there's no time gap, draw vertical line
+                    # Even if there is a gap, connecting them makes it "continuous"
+                    segments.append([(t_end, skill_id), (next_start, next_skill)])
+                    colors.append(c) # Use previous color for the transition
                 
             lc = mcoll.LineCollection(segments, colors=colors, linewidths=3)
             ax.add_collection(lc)
@@ -465,32 +475,26 @@ def plot_training_progress(metrics_data, output_dir):
     # Sort by steps just in case
     metrics_data.sort(key=lambda x: x["steps"])
     
-    steps = [m["steps"] for m in metrics_data]
-    success_rates = [m["success_rate"] for m in metrics_data]
-    skill_ratios = [m["active_skill_ratio"] for m in metrics_data]
+    # Process X-axis: Convert steps to "Thousands"
+    steps = [m["steps"] / 1000.0 for m in metrics_data]
+    
+    # Process Y-axis: Success Rate in Percentage (0-100)
+    success_rates = [m["success_rate"] * 100 for m in metrics_data]
     
     plt.figure(figsize=(10, 6))
     
-    # Dual axis plot
-    ax1 = plt.gca()
-    ax2 = ax1.twinx()
-    
     # Plot Success Rate
-    line1 = ax1.plot(steps, success_rates, marker='o', color='purple', linewidth=2, label='Success Rate')
-    ax1.set_xlabel('Training Steps (or Epoches)')
-    ax1.set_ylabel('Success Rate', color='purple')
-    ax1.tick_params(axis='y', labelcolor='purple')
-    ax1.set_ylim(-0.05, 1.05)
+    # Standard single axis plot now
+    # Using 'plt.plot' directly on the figure's default axes
+    plt.plot(steps, success_rates, marker='o', linewidth=2, label='Success Rate', color='purple')
     
-    # Plot Skill Usage
-    line2 = ax2.plot(steps, skill_ratios, marker='s', color='orange', linewidth=2, linestyle='--', label='Skill Usage %')
-    ax2.set_ylabel('Active Skill Ratio (Bag Usage)', color='orange')
-    ax2.tick_params(axis='y', labelcolor='orange')
-    ax2.set_ylim(-0.05, 1.05)
+    plt.xlabel('Training Steps (in Thousands)')
+    plt.ylabel('Success Rate (%)')
+    plt.ylim(-5, 105) # 0 to 100 with small padding
+    plt.xlim(left=0) # Start X-axis at 0
     
-    lines = line1 + line2
-    labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='upper left')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    # plt.legend(loc='upper left')
     
     plt.title('Controller Training Progress: Success & Skill Discovery')
     plt.tight_layout()
