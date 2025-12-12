@@ -199,8 +199,8 @@ class MetaControllerEnv(gym.Env):
                     primitive_action = self.model_interfaces[self.current_algo].get_action(self._last_raw_obs, z_vector)
                 else:
                     primitive_action = self.model_interfaces[self.current_algo].get_action(current_obs, z_vector)
-                    if self.current_algo == "RSD":
-                        print(f"RSD IS USED WITH PARAMS: {self.current_local_skill}, {z_vector}, action: {primitive_action}")
+                    # if self.current_algo == "RSD":
+                        # print(f"RSD IS USED WITH PARAMS: {self.current_local_skill}, {z_vector}, action: {primitive_action}")
 
             # Update title before step if human rendering, because minigrid might render in step
             if self.render_mode == "human":
