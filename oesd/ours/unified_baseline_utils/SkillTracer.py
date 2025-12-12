@@ -44,6 +44,7 @@ class SkillTracer:
         adapter: Any,
         algo_name: str,
         output_dir: str = "./skill_traces",
+        skill_colors: List[str] | None = None,
     ):
         """
         Args:
@@ -51,12 +52,19 @@ class SkillTracer:
             adapter: loaded adapter with get_action(obs, skill_z) and set_skill(idx)
             algo_name: name of algorithm (e.g., "LSD", "RSD")
             output_dir: where to save images
+            skill_colors: list of hex color strings for each skill (optional)
         """
         self.env_factory = env_factory
         self.adapter = adapter
         self.algo_name = algo_name
         self.output_dir = output_dir
         self.skill_dim = adapter.skill_dim
+        
+        # Use provided skill colors or default to blue
+        if skill_colors is None:
+            self.skill_colors = ["#1f77b4"] * self.skill_dim
+        else:
+            self.skill_colors = skill_colors
         
         # Get tile size from environment (MiniGrid specific)
         temp_env = env_factory()
@@ -129,27 +137,62 @@ class SkillTracer:
         env = self.env_factory()
         obs, info = env.reset(seed=seed)
 
-        # Set skill if specified
-        if skill_idx is not None and hasattr(self.adapter, "set_skill"):
-            self.adapter.set_skill(int(skill_idx))
+        # Get skill vector from skill registry if skill_idx is provided
+        skill_vec = None
+        if skill_idx is not None:
+            # Get the skill vector from the adapter's skill registry
+            skills = self.adapter.skill_registry.get_skills_belonging_to_algo(self.adapter.algo_name)
+            if skill_idx < len(skills):
+                skill_vec = skills[skill_idx]
 
         trace = []
         pos, state = self._extract_state(env, obs, info)
         trace.append(TraceStep(position=pos.copy(), action=-1, reward=0.0, **state))
 
         for step in range(horizon):
-            # Get action from adapter
-            action = self.adapter.get_action(obs, deterministic=True)
+            # For DIAYN/DADS/METRA, pass raw obs dict; for LSD/RSD, process it
+            # DIAYN/DADS/METRA expect dict with 'image' and 'state' keys
+            # LSD expects flattened array
+            if self.adapter.algo_name.upper() in ['DIAYN', 'DADS', 'METRA']:
+                # Pass raw observation dict
+                proc_obs = obs
+            elif hasattr(self.adapter, 'process_obs'):
+                # Process observation for LSD, RSD
+                proc_obs = self.adapter.process_obs(obs, env)
+            else:
+                proc_obs = obs
+                
+            # Get action from adapter - pass skill_vec explicitly, use stochastic sampling
+            try:
+                action = self.adapter.get_action(proc_obs, skill_vec, deterministic=False)
+            except TypeError:
+                # Fall back to single parameter (adapters without skill_vec parameter)
+                try:
+                    action = self.adapter.get_action(proc_obs, deterministic=False)
+                except Exception:
+                    # Last resort: random action
+                    action = env.action_space.sample()
+            
+            # Normalize action to scalar int
+            act_arr = np.asarray(action).reshape(-1)
+            if act_arr.size > 1:
+                chosen = int(np.argmax(act_arr))
+            else:
+                chosen = int(np.round(act_arr[0]))
+            
+            chosen = int(np.clip(chosen, 0, self.adapter.action_dim - 1))
+
+            chosen = int(np.clip(chosen, 0, self.adapter.action_dim - 1))
 
             # Step environment
-            obs, reward, terminated, truncated, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(chosen)
 
             # Extract position and interactions
             pos, state = self._extract_state(env, obs, info)
             trace.append(
                 TraceStep(
                     position=pos.copy(),
-                    action=action,
+                    action=chosen,
                     reward=reward,
                     **state,
                     info=info,
@@ -198,12 +241,18 @@ class SkillTracer:
         grid_positions = np.array([step.position for step in trace])
         pixel_positions = np.array([self._grid_to_pixel(pos) for pos in grid_positions])
 
+        # Get color for this skill
+        if skill_idx is not None and skill_idx < len(self.skill_colors):
+            trajectory_color = self.skill_colors[skill_idx]
+        else:
+            trajectory_color = "#1f77b4"  # Default blue
+
         # Draw trajectory
         if len(pixel_positions) > 1:
             ax.plot(
                 pixel_positions[:, 0],
                 pixel_positions[:, 1],
-                color="#1f77b4",
+                color=trajectory_color,
                 linewidth=2.0,
                 alpha=0.7,
                 marker="o",
@@ -352,3 +401,169 @@ class SkillTracer:
 
         print(f"\nAll traces saved to: {self.output_dir}\n")
         return results
+
+    def trace_all_skills_combined(self, num_episodes: int = 1, save_images: bool = True, seed: int = 0, horizon: int = 200) -> dict:
+        """
+        Trace all skills in a single combined visualization.
+        Each skill gets one episode traced, all shown in one image with color gradient.
+
+        Args:
+            num_episodes: episodes per skill (typically 1 for combined view)
+            save_images: whether to save the combined image
+            seed: random seed for consistent environment layout
+            horizon: max steps per episode
+
+        Returns:
+            aggregated results dict
+        """
+        print(f"\n{'='*60}")
+        print(f"Tracing all skills (combined) for {self.algo_name} ({self.skill_dim} skills)")
+        print(f"{'='*60}")
+
+        # Collect all traces
+        all_traces = []
+        bg = None
+        
+        for skill_idx in range(self.skill_dim):
+            trace, trace_bg = self.trace_episode(skill_idx=skill_idx, seed=seed, horizon=horizon)
+            all_traces.append((skill_idx, trace))
+            if bg is None:
+                bg = trace_bg
+            print(f"[{self.algo_name} Skill {skill_idx}] {len(trace) - 1} steps")
+
+        # Plot combined visualization
+        if save_images:
+            fig = self.plot_combined_traces(all_traces, bg=bg)
+            # Save as both PNG and PDF
+            filename_png = f"{self.algo_name}_all_skills_combined.png"
+            filename_pdf = f"{self.algo_name}_all_skills_combined.pdf"
+            filepath_png = os.path.join(self.output_dir, filename_png)
+            filepath_pdf = os.path.join(self.output_dir, filename_pdf)
+            fig.savefig(filepath_png, dpi=150, bbox_inches="tight")
+            fig.savefig(filepath_pdf, format='pdf', bbox_inches="tight")
+            plt.close(fig)
+            print(f"\n  Saved combined: {filepath_png}")
+            print(f"  Saved combined: {filepath_pdf}")
+
+        return {
+            "algo": self.algo_name,
+            "num_skills": self.skill_dim,
+            "traces": all_traces,
+            "output_dir": self.output_dir,
+        }
+
+    def plot_combined_traces(self, all_traces: List[Tuple[int, List[TraceStep]]], bg: np.ndarray | None = None) -> plt.Figure:
+        """
+        Plot all skill traces in a single figure with color gradient.
+
+        Args:
+            all_traces: list of (skill_idx, trace) tuples
+            bg: background image
+
+        Returns:
+            matplotlib figure
+        """
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        # Draw background
+        if bg is not None:
+            ax.imshow(bg, origin="upper")
+        else:
+            try:
+                env = self.env_factory()
+                env.reset()
+                fallback_bg = env.render()
+                ax.imshow(fallback_bg, origin="upper")
+                env.close()
+            except Exception:
+                ax.set_facecolor("black")
+
+        # Track door opening events
+        door_opened_skills = []
+
+        # Plot each skill's trajectory with its assigned color
+        # Calculate offset for each skill to prevent overlapping
+        num_skills = len(all_traces)
+        offset_range = 8  # pixels offset range
+        
+        for skill_idx, trace in all_traces:
+            if len(trace) < 2:
+                continue
+                
+            grid_positions = np.array([step.position for step in trace])
+            pixel_positions = np.array([self._grid_to_pixel(pos) for pos in grid_positions])
+
+            # Apply small offset based on skill index to prevent overlapping
+            # Distribute offsets in a circular pattern
+            angle = (skill_idx / max(num_skills, 1)) * 2 * np.pi
+            offset_x = offset_range * np.cos(angle)
+            offset_y = offset_range * np.sin(angle)
+            pixel_positions[:, 0] += offset_x
+            pixel_positions[:, 1] += offset_y
+
+            # Get color for this skill
+            trajectory_color = self.skill_colors[skill_idx] if skill_idx < len(self.skill_colors) else "#1f77b4"
+
+            # Draw trajectory
+            ax.plot(
+                pixel_positions[:, 0],
+                pixel_positions[:, 1],
+                color=trajectory_color,
+                linewidth=2.0,
+                alpha=0.7,
+                marker="o",
+                markersize=2,
+                label=f"Skill {skill_idx}",
+            )
+            
+            # Check if door was opened during this skill's trajectory
+            door_opened = False
+            door_open_pos = None
+            for i, step in enumerate(trace):
+                if step.door_opened and (i == 0 or not trace[i - 1].door_opened):
+                    # Door opened at this step
+                    door_opened = True
+                    door_open_pos = self._grid_to_pixel(step.position)
+                    # Mark door opening event
+                    ax.plot(
+                        door_open_pos[0],
+                        door_open_pos[1],
+                        marker="*",
+                        markersize=15,
+                        color="gold",
+                        markeredgecolor="black",
+                        markeredgewidth=1.5,
+                        zorder=10,
+                    )
+                    break
+            
+            if door_opened:
+                door_opened_skills.append(skill_idx)
+
+        # Title with door opening info
+        title = f"{self.algo_name} - All {len(all_traces)} Skills"
+        if door_opened_skills:
+            title += f"\n(Door opened by: Skill {', '.join(map(str, door_opened_skills))})"
+        ax.set_title(title, fontsize=16, fontweight="bold")
+
+        # Formatting
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.grid(False)
+        
+        # Add door opening marker to legend if any skill opened it
+        handles, labels = ax.get_legend_handles_labels()
+        if door_opened_skills:
+            from matplotlib.lines import Line2D
+            door_marker = Line2D([0], [0], marker='*', color='w', 
+                               markerfacecolor='gold', markeredgecolor='black',
+                               markeredgewidth=1.5, markersize=12, label='Door Opened')
+            handles.append(door_marker)
+            labels.append('Door Opened')
+        
+        ax.legend(handles, labels, loc="upper left", fontsize=8, ncol=2)
+        ax.set_aspect("equal")
+        plt.tight_layout()
+
+        return fig
+

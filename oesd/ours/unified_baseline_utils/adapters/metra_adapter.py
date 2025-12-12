@@ -110,16 +110,22 @@ class MetraAdapter(BaseAdapter):
         return action
 
     def process_obs(self, obs, env):
-
+        """
+        Process MiniGrid observation dict to flat vector for METRA policy.
+        MiniGrid returns dict with 'image' (7x7x3) that needs to be flattened to (147,)
+        """
         if isinstance(obs, dict):
-            if 'agent_pos' in obs:
-                return np.array(obs['agent_pos'], dtype=np.float32)
-            elif 'observation' in obs and hasattr(obs['observation'], 'agent_pos'):
-                print("METRAAA PROC OBS shape:", np.array(obs['observation'].agent_pos, dtype=np.float32))
-                return np.array(obs['observation'].agent_pos, dtype=np.float32)
+            if 'image' in obs:
+                # Flatten the image observation
+                return np.asarray(obs['image'], dtype=np.float32).flatten()
+            elif 'observation' in obs:
+                return np.asarray(obs['observation'], dtype=np.float32).flatten()
         
-        # Last resort: return zeros or raise error
-        print("Warning: Could not extract agent position, returning zeros")
-        return np.array([0, 0], dtype=np.float32)
+        # If already a numpy array, just flatten it
+        if isinstance(obs, np.ndarray):
+            return obs.flatten().astype(np.float32)
+        
+        # Last resort: try to convert to numpy and flatten
+        return np.asarray(obs, dtype=np.float32).flatten()
         
         # returned SHAPE: (147,)

@@ -13,12 +13,20 @@ ACTION_DIM = 6
 # self._env.actions.drop,
 # self._env.actions.toggle,
 
+COLORS = {
+    "red": "#E22B34",  #diayn
+    "gold": "#FFD300", #dads
+    "pink": "#FF5CC0", #LSD
+    "blue": "#438ADC", #metra
+    "green": "#35C05E", #rsd
+}
+
 model_cfgs = []
 
 model_cfgs.append(ModelConfig(
     algo_name="RSD",
     algo_color="green",
-    checkpoint_path=os.path.join(CHECKPOINT_PATH, "RSD/4D_3P_img_dir_carry_orig_C/option_policy175.pt"),
+    checkpoint_path=os.path.join("oesd/baseline_checkpoints/RSD/4D_3P_img_dir_carry_orig_C/option_policy200.pt"),
     action_dim=ACTION_DIM,
     skill_dim=SKILL_DIM,
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "RSD")},
@@ -27,7 +35,7 @@ model_cfgs.append(ModelConfig(
 model_cfgs.append(ModelConfig(
     algo_name="LSD",
     algo_color="purple",
-    checkpoint_path=os.path.join(CHECKPOINT_PATH, "LSD/lsd_latest.pth"),
+    checkpoint_path="oesd/baseline_checkpoints/LSD/lsd_latest.pth",
     action_dim=ACTION_DIM,
     skill_dim=SKILL_DIM,
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "LSD")},
@@ -36,7 +44,7 @@ model_cfgs.append(ModelConfig(
 model_cfgs.append(ModelConfig(
     algo_name="DIAYN",
     algo_color="red",
-    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DIAYN/diayn_doorkey.pth"),
+    checkpoint_path="oesd/baseline_checkpoints/DIAYN/diayn_doorkey.pth",
     action_dim=7,
     skill_dim=SKILL_DIM,
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DIAYN")},
@@ -45,16 +53,17 @@ model_cfgs.append(ModelConfig(
 model_cfgs.append(ModelConfig(
     algo_name="DADS",
     algo_color="pink",
-    checkpoint_path=os.path.join(CHECKPOINT_PATH, "DADS/dads_doorkey.pth"),
+    checkpoint_path="oesd/baseline_checkpoints/DADS/dads_doorkey.pth",
     action_dim=ACTION_DIM,
     skill_dim=SKILL_DIM,
     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "DADS")},
 ))
 
-# model_cfgs.append(ModelConfig(
-#     algo_name="METRA",
-#     checkpoint_path=os.path.join(CHECKPOINT_PATH, "METRA/"),
-#     action_dim=7,
-#     skill_dim=SKILL_DIM,
-#     adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "METRA")},
-# ))
+model_cfgs.append(ModelConfig(
+    algo_name="METRA",
+    algo_color="orange",
+    checkpoint_path="oesd/baseline_checkpoints/METRA/",
+    action_dim=7,
+    skill_dim=SKILL_DIM,
+    adapter_kwargs={"save_dir": os.path.join(VIS_PATH, "METRA")},
+))

@@ -87,6 +87,7 @@ class RSDAdapter(BaseAdapter):
 
         self.discrete = self.option_policy_ckpt['discrete']
         self.dim_option = self.option_policy_ckpt['dim_option']
+        self.skill_dim = skill_registry.skill_count_per_algo  # Add skill_dim attribute
         
         skill_list = [self.init_skill_vector(i, unit_length=True) for i in range(skill_registry.skill_count_per_algo)]
         # register the skills with the skill registry
