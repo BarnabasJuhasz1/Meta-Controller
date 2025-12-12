@@ -10,6 +10,9 @@ import seaborn as sns
 import seaborn as sns
 import pandas as pd
 import matplotlib.collections as mcoll
+from matplotlib.ticker import MultipleLocator
+from matplotlib.ticker import FuncFormatter
+
 
 COLORS = {
     "red": "#E22B34",
@@ -322,6 +325,16 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
                 # Get color
                 c = ALGO_COLORS.get(algo_name, "black")
                 colors.append(c)
+
+                # Vertical connection to next segment
+                if i < len(history) - 1:
+                    next_h = history[i+1]
+                    next_start = next_h["step_start"]
+                    next_skill = next_h["skill_id"]
+                    # If there's no time gap, draw vertical line
+                    # Even if there is a gap, connecting them makes it "continuous"
+                    segments.append([(t_end, skill_id), (next_start, next_skill)])
+                    colors.append(c) # Use previous color for the transition
                 
             lc = mcoll.LineCollection(segments, colors=colors, linewidths=3)
             ax.add_collection(lc)
@@ -457,6 +470,7 @@ def make_gif(frame_folder):
     frame_one.save(os.path.join(frame_folder, "skill_usage_over_time.gif"), format="GIF", append_images=frames[1:],
                save_all=True, duration=500, loop=0)
 
+
 def plot_training_progress(metrics_data, output_dir):
     if not metrics_data:
         print("No metrics to plot training progress.")
@@ -470,36 +484,43 @@ def plot_training_progress(metrics_data, output_dir):
     skill_ratios = [m["active_skill_ratio"] for m in metrics_data]
     
     plt.figure(figsize=(10, 6))
-    
-    # Dual axis plot
-    ax1 = plt.gca()
-    ax2 = ax1.twinx()
-    
+
+    ax = plt.gca()
+
+    # ax.grid(False, linestyle='--', linewidth=0.7, alpha=0.6)
+
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f'{y*100:.0f}%'))
+    ax.xaxis.set_major_locator(MultipleLocator(5000))
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{x/1000:.0f}'))
+
+
     # Plot Success Rate
-    line1 = ax1.plot(steps, success_rates, marker='o', color='purple', linewidth=2, label='Success Rate')
-    ax1.set_xlabel('Training Steps (or Epoches)')
-    ax1.set_ylabel('Success Rate', color='purple')
-    ax1.tick_params(axis='y', labelcolor='purple')
-    ax1.set_ylim(-0.05, 1.05)
-    
+    line1 = ax.plot(steps, success_rates, marker='o', color='purple', linewidth=2, label='Success %')
+
     # Plot Skill Usage
-    line2 = ax2.plot(steps, skill_ratios, marker='s', color='orange', linewidth=2, linestyle='--', label='Skill Usage %')
-    ax2.set_ylabel('Active Skill Ratio (Bag Usage)', color='orange')
-    ax2.tick_params(axis='y', labelcolor='orange')
-    ax2.set_ylim(-0.05, 1.05)
+    line2 = ax.plot(steps, skill_ratios, marker='s', color='orange', linewidth=2, linestyle='--', label='Skill Usage %')
+
+    ax.set_xlabel('Training Steps (in Thousands)')
     
+
+
+    ax.set_ylabel('Percentage')
+    ax.set_ylim(-0.05, 1.05)
+    
+    # Legend
     lines = line1 + line2
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='upper left')
-    
+    ax.legend(lines, labels, loc='upper left')
+
     plt.title('Controller Training Progress: Success & Skill Discovery')
     plt.tight_layout()
-    
-    out_path = os.path.join(output_dir, "training_progress.pdf")
+    #plt.show()
+        
+    out_path = os.path.join(output_dir, "training_progress.png")
     plt.savefig(out_path)
     print(f"Training progress plot saved to {out_path}")
 
-    # Also save CSV for convenience
+
     df = pd.DataFrame(metrics_data)
     df.to_csv(os.path.join(output_dir, "training_metrics.csv"), index=False)
 
