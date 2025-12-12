@@ -291,7 +291,7 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
     # plt.ylabel("Frequency")
     # plt.legend(handles=handles, loc="upper right")
     # plt.title(f"Skill Usage Distribution (Steps: {filename}, Succ. Rate: {success_rate:.2%}, Num. of Skills: {unique_skills_count})")
-    # plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.pdf"))
+    # plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
     # plt.close()
     make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skill_counts, success_rate, unique_skills_count)
     
@@ -299,6 +299,8 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
     num_timelines_to_plot = min(3, len(metrics))
     if num_timelines_to_plot > 0:
         fig, axes = plt.subplots(num_timelines_to_plot, 1, figsize=(12, 3 * num_timelines_to_plot), sharex=True)
+        # Add common X label
+        fig.supxlabel("Time Steps (Environment Steps)")
         if num_timelines_to_plot == 1:
             axes = [axes]
             
@@ -323,7 +325,7 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
                 segments.append([(t_start, skill_id), (t_end, skill_id)])
                 
                 # Get color
-                c = ALGO_COLORS.get(algo_name, "black")
+                c = ALGO_COLORS.get(algo_name.lower(), "black")
                 colors.append(c)
 
                 # Vertical connection to next segment
@@ -350,7 +352,7 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
                 handles = [mpatches.Patch(color=color, label=algo) for algo, color in ALGO_COLORS.items()]
                 ax.legend(handles=handles, loc="upper right", title="Algorithm", ncol=len(ALGO_COLORS))
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f"{filename}_hrl_timeline.pdf"))
+    plt.savefig(os.path.join(output_dir, f"{filename}_hrl_timeline.png"))
     plt.close()
     
     # 3. Strategy Analysis (Textual)
@@ -382,8 +384,10 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
         f.write(f"- **Entropy**: {entropy:.4f}\n\n")
         f.write(f"### Strategy Analysis\n")
         f.write(f"> {analysis_text}\n\n")
-        f.write(f"![Skill Usage]({filename}_skill_usage.pdf)\n")
-        f.write(f"![Timeline]({filename}_hrl_timeline.pdf)\n")
+        f.write(f"### Strategy Analysis\n")
+        f.write(f"> {analysis_text}\n\n")
+        f.write(f"![Skill Usage]({filename}_skill_usage.png)\n")
+        f.write(f"![Timeline]({filename}_hrl_timeline.png)\n")
     
     print(f"\nReport saved to {report_path}")
     
@@ -448,13 +452,13 @@ def make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skil
     plt.legend(loc="upper right", title="Algorithm")
 
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.pdf"))
+    plt.savefig(os.path.join(output_dir, f"{filename}_skill_usage.png"))
     plt.close()
 
 def make_gif(frame_folder):
     # 1. Create the file pattern (e.g., all pngs starting with "frame_")
-    # Change 'frame_*.pdf' to match your specific naming convention
-    files = glob.glob(f"{frame_folder}/*_skill_usage.pdf")
+    # Change 'frame_*.png' to match your specific naming convention
+    files = glob.glob(f"{frame_folder}/*_skill_usage.png")
     
     # 2. Sort the files
     # Standard python sort(). See "Handling Sorting" below if you have issues.
