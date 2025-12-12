@@ -307,9 +307,8 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
         num_plots = len(current_metrics)
         
         if num_plots > 0:
-            fig, axes = plt.subplots(num_plots, 1, figsize=(12, 3 * num_plots), sharex=True)
-            # Add common X label
-            fig.supxlabel("Time Steps")
+            # sharex=False ensures every subplot has its own X axis labels/ticks
+            fig, axes = plt.subplots(num_plots, 1, figsize=(12, 3 * num_plots), sharex=False)
             
             if num_plots == 1:
                 axes = [axes]
@@ -360,6 +359,7 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
                 
                 ax.autoscale_view()
                 ax.set_ylabel("Global Skill ID")
+                ax.set_xlabel("Time Steps in the Environment")
                 ax.set_ylim(-1, len(registry.bag_of_skills))
                 ax.grid(True, alpha=0.3)
                 ax.set_title(f"Episode {start_idx + i + 1} Timeline (Success: {ep_data['success']}, Reward: {ep_data['reward']:.2f})")
