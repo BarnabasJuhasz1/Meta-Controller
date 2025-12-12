@@ -10,6 +10,9 @@ import seaborn as sns
 import seaborn as sns
 import pandas as pd
 import matplotlib.collections as mcoll
+from matplotlib.ticker import MultipleLocator
+from matplotlib.ticker import FuncFormatter
+
 
 COLORS = {
     "red": "#E22B34",
@@ -467,6 +470,7 @@ def make_gif(frame_folder):
     frame_one.save(os.path.join(frame_folder, "skill_usage_over_time.gif"), format="GIF", append_images=frames[1:],
                save_all=True, duration=500, loop=0)
 
+
 def plot_training_progress(metrics_data, output_dir):
     if not metrics_data:
         print("No metrics to plot training progress.")
@@ -475,35 +479,48 @@ def plot_training_progress(metrics_data, output_dir):
     # Sort by steps just in case
     metrics_data.sort(key=lambda x: x["steps"])
     
-    # Process X-axis: Convert steps to "Thousands"
-    steps = [m["steps"] / 1000.0 for m in metrics_data]
-    
-    # Process Y-axis: Success Rate in Percentage (0-100)
-    success_rates = [m["success_rate"] * 100 for m in metrics_data]
+    steps = [m["steps"] for m in metrics_data]
+    success_rates = [m["success_rate"] for m in metrics_data]
+    skill_ratios = [m["active_skill_ratio"] for m in metrics_data]
     
     plt.figure(figsize=(10, 6))
-    
+
+    ax = plt.gca()
+
+    # ax.grid(False, linestyle='--', linewidth=0.7, alpha=0.6)
+
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f'{y*100:.0f}%'))
+    ax.xaxis.set_major_locator(MultipleLocator(5000))
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{x/1000:.0f}'))
+
+
     # Plot Success Rate
-    # Standard single axis plot now
-    # Using 'plt.plot' directly on the figure's default axes
-    plt.plot(steps, success_rates, marker='o', linewidth=2, label='Success Rate', color='purple')
+    line1 = ax.plot(steps, success_rates, marker='o', color='purple', linewidth=2, label='Success %')
+
+    # Plot Skill Usage
+    line2 = ax.plot(steps, skill_ratios, marker='s', color='orange', linewidth=2, linestyle='--', label='Skill Usage %')
+
+    ax.set_xlabel('Training Steps (in Thousands)')
     
-    plt.xlabel('Training Steps (in Thousands)')
-    plt.ylabel('Success Rate (%)')
-    plt.ylim(-5, 105) # 0 to 100 with small padding
-    plt.xlim(left=0) # Start X-axis at 0
+
+
+    ax.set_ylabel('Percentage')
+    ax.set_ylim(-0.05, 1.05)
     
-    plt.grid(True, linestyle='--', alpha=0.7)
-    # plt.legend(loc='upper left')
-    
+    # Legend
+    lines = line1 + line2
+    labels = [l.get_label() for l in lines]
+    ax.legend(lines, labels, loc='upper left')
+
     plt.title('Controller Training Progress: Success & Skill Discovery')
     plt.tight_layout()
-    
+    #plt.show()
+        
     out_path = os.path.join(output_dir, "training_progress.png")
     plt.savefig(out_path)
     print(f"Training progress plot saved to {out_path}")
 
-    # Also save CSV for convenience
+
     df = pd.DataFrame(metrics_data)
     df.to_csv(os.path.join(output_dir, "training_metrics.csv"), index=False)
 
