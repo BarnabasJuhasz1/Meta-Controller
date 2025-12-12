@@ -296,64 +296,88 @@ def analyze_and_visualize(metrics, output_dir, registry, model_interfaces, filen
     make_skill_usage_plot(output_dir, filename, registry, model_interfaces, skill_counts, success_rate, unique_skills_count)
     
     # 2. HRL Timeline (Color-coded by Algorithm)
-    num_timelines_to_plot = min(3, len(metrics))
-    if num_timelines_to_plot > 0:
-        fig, axes = plt.subplots(num_timelines_to_plot, 1, figsize=(12, 3 * num_timelines_to_plot), sharex=True)
-        # Add common X label
-        fig.supxlabel("Time Steps (Environment Steps)")
-        if num_timelines_to_plot == 1:
-            axes = [axes]
+    # 2. HRL Timeline (Color-coded by Algorithm)
+    # Paginate: 5 episodes per plot
+    chunk_size = 5
+    num_episodes = len(metrics)
+    
+    for chunk_idx, start_idx in enumerate(range(0, num_episodes, chunk_size)):
+        end_idx = min(start_idx + chunk_size, num_episodes)
+        current_metrics = metrics[start_idx:end_idx]
+        num_plots = len(current_metrics)
+        
+        if num_plots > 0:
+            fig, axes = plt.subplots(num_plots, 1, figsize=(12, 3 * num_plots), sharex=True)
+            # Add common X label
+            fig.supxlabel("Time Steps")
             
-        for i in range(num_timelines_to_plot):
-            ax = axes[i]
-            ep_data = metrics[i]
-            history = ep_data["skill_history"]
-            
-            # Use matplotlib Collection for colorful segments
-            segments = []
-            colors = []
-            
-            # y-value (skill_id) vs x (time)
-            # Create segments of (x, y) -> (x_next, y)
-            for h in history:
-                t_start = h["step_start"]
-                t_end = h["step_end"]
-                skill_id = h["skill_id"]
-                algo_name = h["algo"]
+            if num_plots == 1:
+                axes = [axes]
                 
-                # We can draw a horizontal line at height = skill_id from t_start to t_end
-                segments.append([(t_start, skill_id), (t_end, skill_id)])
+            for i in range(num_plots):
+                ax = axes[i]
+                ep_data = current_metrics[i]
+                history = ep_data["skill_history"]
                 
-                # Get color
-                c = ALGO_COLORS.get(algo_name.lower(), "black")
-                colors.append(c)
+                # Scatter points data
+                scatter_x = []
+                scatter_y = []
+                scatter_colors = []
 
-                # Vertical connection to next segment
-                if i < len(history) - 1:
-                    next_h = history[i+1]
-                    next_start = next_h["step_start"]
-                    next_skill = next_h["skill_id"]
-                    # If there's no time gap, draw vertical line
-                    # Even if there is a gap, connecting them makes it "continuous"
-                    segments.append([(t_end, skill_id), (next_start, next_skill)])
-                    colors.append(c) # Use previous color for the transition
+                # Line segments
+                segments = []
+                line_colors = []
                 
-            lc = mcoll.LineCollection(segments, colors=colors, linewidths=3)
-            ax.add_collection(lc)
+                # y-value (skill_id) vs x (time)
+                # strictly sequential segments
+                for idx, h in enumerate(history):
+                    current_x = h["step_start"]
+                    current_y = h["skill_id"]
+                    algo_name = h["algo"]
+                    color = ALGO_COLORS.get(algo_name.lower(), "black")
+
+                    # Collect scatter data (Start Points)
+                    scatter_x.append(current_x)
+                    scatter_y.append(current_y)
+                    scatter_colors.append(color)
+
+                    # Connect to NEXT start point (Slanted Line)
+                    if idx < len(history) - 1:
+                        next_h = history[idx+1]
+                        next_x = next_h["step_start"]
+                        next_y = next_h["skill_id"]
+                        
+                        segments.append([(current_x, current_y), (next_x, next_y)])
+                        line_colors.append(color) # Use CURRENT algo color for connection
+
+                # Draw lines first (so dots are on top)
+                lc = mcoll.LineCollection(segments, colors=line_colors, linewidths=2)
+                ax.add_collection(lc)
+
+                # Draw "Big Dots"
+                # Reduced size from 150 to 75
+                ax.scatter(scatter_x, scatter_y, c=scatter_colors, s=75, zorder=5)
+                
+                ax.autoscale_view()
+                ax.set_ylabel("Global Skill ID")
+                ax.set_ylim(-1, len(registry.bag_of_skills))
+                ax.grid(True, alpha=0.3)
+                ax.set_title(f"Episode {start_idx + i + 1} Timeline (Success: {ep_data['success']}, Reward: {ep_data['reward']:.2f})")
+                
+                # Add Legend just once on the top plot
+                if i == 0:
+                    handles = [mpatches.Patch(color=color, label=algo) for algo, color in ALGO_COLORS.items()]
+                    ax.legend(handles=handles, loc="upper right", title="Algorithm", ncol=len(ALGO_COLORS))
             
-            ax.autoscale_view()
-            ax.set_ylabel("Global Skill ID")
-            ax.set_ylim(-1, len(registry.bag_of_skills))
-            ax.grid(True, alpha=0.3)
-            ax.set_title(f"Episode {i+1} Timeline (Success: {ep_data['success']}, Reward: {ep_data['reward']:.2f})")
+            plt.tight_layout()
             
-            # Add Legend just once on the top plot
-            if i == 0:
-                handles = [mpatches.Patch(color=color, label=algo) for algo, color in ALGO_COLORS.items()]
-                ax.legend(handles=handles, loc="upper right", title="Algorithm", ncol=len(ALGO_COLORS))
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f"{filename}_hrl_timeline.png"))
-    plt.close()
+            if num_episodes <= chunk_size:
+                out_name = f"{filename}_hrl_timeline.png"
+            else:
+                out_name = f"{filename}_hrl_timeline_part{chunk_idx + 1}.png"
+                
+            plt.savefig(os.path.join(output_dir, out_name))
+            plt.close()
     
     # 3. Strategy Analysis (Textual)
     print("\n--- Strategy Analysis ---")
@@ -499,7 +523,7 @@ def plot_training_progress(metrics_data, output_dir):
 
 
     # Plot Success Rate
-    line1 = ax.plot(steps, success_rates, marker='o', color='purple', linewidth=2, label='Success %')
+    line1 = ax.plot(steps, success_rates, color='purple', linewidth=2, label='Success %')
 
     # Plot Skill Usage
     line2 = ax.plot(steps, skill_ratios, marker='s', color='orange', linewidth=2, linestyle='--', label='Skill Usage %')
