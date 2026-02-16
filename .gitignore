@@ -46,9 +46,21 @@ train_results/
 jobs/
 visualizations/
 
+# experiments
+*exp/
+# checkpoints
+*.pt
+*.pkl
+
+# gifs
+*.gif
+
 # vim stuff
 *.swp
 
 # Snellius job outputs
 *.out
 *.job
+
+oesd/baselines/metra/recs/*
+oesd/baselines/metra/models/*

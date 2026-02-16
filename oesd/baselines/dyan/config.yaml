@@ -1,0 +1,26 @@
+# DIAYN Configuration for MiniGrid DoorKey 8x8
+
+env:
+  id: "MiniGrid-DoorKey-8x8-v0"
+  max_steps: 300       # Give agent enough time to find the key
+  
+agent:
+  skill_dim: 5         # Number of distinct skills to learn
+  hidden_dim: 256
+  lr: 0.0003           # 3e-4 (Standard Adam learning rate)
+  gamma: 0.99
+  entropy_coef: 0.05   # Enough to encourage exploration, low enough to stable skills
+  update_epochs: 4     # PPO update passes
+  clip_eps: 0.2        # PPO clip parameter
+
+training:
+  max_episodes: 5000   # Total training episodes
+  batch_size: 512      # Larger batch for stable gradients
+  save_interval: 100   # Save model every N episodes
+  log_interval: 10     # Print stats every N episodes
+  device: "auto"       # auto, cuda, or cpu
+
+# Advanced: Discriminator Settings
+discriminator:
+  hidden_dim: 128
+  lr: 0.0003
